@@ -4,9 +4,9 @@
 #include <drogon/orm/DbClient.h>
 #include <optional>
 
-using drogon::orm::DbClientPtr;
-
 namespace Models {
+
+using drogon::orm::DbClientPtr;
 
 User::User(const drogon::orm::Row &row) {
   try {
@@ -23,6 +23,10 @@ User::User(const drogon::orm::Row &row) {
 
 std::optional<User> User::getByEmail(const DbClientPtr &dbClient,
                                      const std::string &email) {
+  if (email.empty()) {
+    return std::nullopt;
+  }
+
   auto result = dbClient->execSqlSync(
       "SELECT id, email, nickname, passwordHash FROM users WHERE email = $1 LIMIT 1",
       email);
@@ -40,7 +44,6 @@ std::optional<User> User::getByEmail(const DbClientPtr &dbClient,
 
 std::optional<User> User::getById(const DbClientPtr &dbClient,
                                   const std::string &id) {
-  // Validate and convert string ID to integer for database query
   if (id.empty()) {
     return std::nullopt;
   }

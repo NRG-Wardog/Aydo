@@ -6,6 +6,7 @@
 namespace DatabaseSetup {
 
 bool makeSureUserTableExists(const drogon::orm::DbClientPtr &dbClient);
+bool makeSureScansTableExists(const drogon::orm::DbClientPtr &dbClient);
 
 bool setupDatabase();
 

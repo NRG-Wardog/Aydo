@@ -139,9 +139,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Controllers\Auth.cpp" />
+    <ClCompile Include="Controllers\Sandbox.cpp" />
     <ClCompile Include="DatabaseSetup.cpp" />
     <ClCompile Include="JWT.cpp" />
     <ClCompile Include="Middleware\Auth.cpp" />
+    <ClCompile Include="Models\Scan.cpp" />
     <ClCompile Include="Models\User.cpp" />
     <ClCompile Include="Server.cpp" />
     <ClCompile Include="Utils\Crypto.cpp" />
@@ -152,9 +154,11 @@
   <ItemGroup>
     <ClInclude Include="Controllers\Auth.hpp" />
     <ClInclude Include="Constants.hpp" />
+    <ClInclude Include="Controllers\Sandbox.hpp" />
     <ClInclude Include="DatabaseSetup.hpp" />
     <ClInclude Include="JWT.hpp" />
     <ClInclude Include="Middleware\Auth.hpp" />
+    <ClInclude Include="Models\Scan.hpp" />
     <ClInclude Include="Models\User.hpp" />
     <ClInclude Include="Utils\Crypto.hpp" />
     <ClInclude Include="Utils\Generic.hpp" />

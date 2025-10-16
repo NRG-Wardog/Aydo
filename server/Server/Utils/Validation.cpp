@@ -52,6 +52,27 @@ bool isValidRefreshToken(std::string_view refreshToken) {
   return true;
 }
 
+// Checks for a valid file hash (a 64 character hex string for SHA256)
+bool isValidFileHash(const std::string &fileHash) {
+  if (fileHash.size() != SHA256_HEX_LENGTH) {
+    return false;
+  }
+
+  // Make sure all chars are hex
+  return std::all_of(fileHash.begin(), fileHash.end(),
+                     [](unsigned char c) { return std::isxdigit(c); });
+}
+
+// Checks for a valid runtime (between MIN and MAX seconds)
+bool isValidRuntime(const std::string &runtime) {
+  if (runtime.empty()) {
+    return false;
+  }
+
+  return std::stoi(runtime) >= MIN_RUNTIME_SECONDS &&
+         std::stoi(runtime) <= MAX_RUNTIME_SECONDS;
+}
+
 std::optional<std::string> validateField(
     const Json::Value *jsonBody,
     const std::string &fieldName,
@@ -60,7 +81,7 @@ std::optional<std::string> validateField(
     return std::nullopt;
   }
 
-  const std::string value = jsonBody->get(fieldName, "").asString();
+  const std::string &value = jsonBody->get(fieldName, "").asString();
 
   if (value.empty()) {
     return std::nullopt;
@@ -80,6 +101,12 @@ std::optional<std::string> validateField(
     break;
   case FieldType::RefreshToken:
     isValid = isValidRefreshToken(value);
+    break;
+  case FieldType::FileHash:
+    isValid = isValidFileHash(value);
+    break;
+  case FieldType::Runtime:
+    isValid = isValidRuntime(value);
     break;
   }
 
