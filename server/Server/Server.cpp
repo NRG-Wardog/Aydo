@@ -3,6 +3,7 @@
 
 #include "Constants.hpp"
 #include "Controllers/Auth.hpp"
+#include "Controllers/Sandbox.hpp"
 #include "DatabaseSetup.hpp"
 
 int main() {

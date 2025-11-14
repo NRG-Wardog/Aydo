@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 
 namespace Utils::Generic {
 
@@ -8,5 +9,6 @@ namespace Utils::Generic {
  * @return Current Unix timestamp as long long
  */
 [[nodiscard]] long long getCurrentTimestamp();
+[[nodiscard]] std::string getScanSavePathForFileHash(const std::string &fileHash);
 
 } // namespace Utils::Generic

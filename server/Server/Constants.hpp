@@ -5,6 +5,7 @@
 namespace Constants {
 constexpr std::string_view CONFIG_FILE = "config.json";
 constexpr std::string_view JWT_SECRET_JSON_KEY = "jwtSecret";
+constexpr std::string_view UPLOADS_DIR = "uploads";
 
 // Authentication - JWT Token TTLs
 constexpr long long ACCESS_TOKEN_TTL_SECONDS = 15 * 60;              // 15 minutes
