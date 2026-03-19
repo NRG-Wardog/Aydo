@@ -1,0 +1,22 @@
+﻿<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+  <Bundle
+    Name="Aydo Security"
+    Manufacturer="Aydo"
+    Version="1.0.0.0"
+    UpgradeCode="7F4E8D4E-7A0D-4E0C-9E2D-6F3380BE8D18"
+    Compressed="yes"
+  >
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication Theme="hyperlinkLargeLicense" LicenseUrl="https://example.com/license" />
+    </BootstrapperApplication>
+
+    <Chain>
+      <MsiPackage
+        Id="AydoInstaller"
+        SourceFile="bin\x64\Release\Installer.msi"
+        Vital="yes"
+      />
+    </Chain>
+  </Bundle>
+</Wix>

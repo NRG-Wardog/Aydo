@@ -1,0 +1,12 @@
+<Project Sdk="WixToolset.Sdk/6.0.2">
+  <PropertyGroup>
+    <OutputType>Bundle</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <Platform>x64</Platform>
+    <EnableDefaultItems>false</EnableDefaultItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Bootstrapper.wxs" />
+  </ItemGroup>
+</Project>

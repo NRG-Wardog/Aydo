@@ -82,6 +82,9 @@
     <ClCompile Include="Utils\ScanProcessingCron.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Controllers\Health.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Constants.hpp">
@@ -127,6 +130,9 @@
       <Filter>Header Files\Utils</Filter>
     </ClInclude>
     <ClInclude Include="Utils\ScanProcessingCron.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Controllers\Health.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

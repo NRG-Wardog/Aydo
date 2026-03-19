@@ -72,26 +72,26 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
-    <LibraryPath>C:\Users\tzema\Downloads\yara-x-main\yara-x-main\target\x86_64-pc-windows-msvc\release;$(LibraryPath)</LibraryPath>
-    <IncludePath>C:\Users\tzema\Downloads\yara-x-main\yara-x-main\target\x86_64-pc-windows-msvc\release\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
-    <LibraryPath>C:\Users\tzema\Downloads\yara-x-main\yara-x-main\target\x86_64-pc-windows-msvc\release;$(LibraryPath)</LibraryPath>
-    <IncludePath>C:\Users\tzema\Downloads\yara-x-main\yara-x-main\target\x86_64-pc-windows-msvc\release\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
-    <LibraryPath>C:\Users\tzema\Downloads\yara-x-main\yara-x-main\target\x86_64-pc-windows-msvc\release;$(LibraryPath)</LibraryPath>
-    <IncludePath>C:\Users\tzema\Downloads\yara-x-main\yara-x-main\target\x86_64-pc-windows-msvc\release\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
-    <LibraryPath>C:\Users\tzema\Downloads\yara-x-main\yara-x-main\target\x86_64-pc-windows-msvc\release;$(LibraryPath)</LibraryPath>
-    <IncludePath>C:\Users\tzema\Downloads\yara-x-main\yara-x-main\target\x86_64-pc-windows-msvc\release\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg">
-    <VcpkgEnableManifest>false</VcpkgEnableManifest>
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <VcpkgUseStatic>true</VcpkgUseStatic>
@@ -113,7 +113,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>yara_x_capi.lib;wintrust.lib;Psapi.lib;ws2_32.lib;advapi32.lib;userenv.lib;bcrypt.lib;ntdll.lib;Crypt32.lib;Secur32.lib;Advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Users\tzema\Downloads\yara-x-main\yara-x-main\target\x86_64-pc-windows-msvc\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -132,7 +132,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>yara_x_capi.lib;wintrust.lib;Psapi.lib;ws2_32.lib;advapi32.lib;userenv.lib;bcrypt.lib;ntdll.lib;Crypt32.lib;Secur32.lib;Advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Users\tzema\Downloads\yara-x-main\yara-x-main\target\x86_64-pc-windows-msvc\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -150,7 +150,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>yara_x_capi.lib;wintrust.lib;Psapi.lib;ws2_32.lib;advapi32.lib;userenv.lib;bcrypt.lib;ntdll.lib;Crypt32.lib;Secur32.lib;Advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Users\tzema\Downloads\yara-x-main\yara-x-main\target\x86_64-pc-windows-msvc\release;D:\yara-x\target\x86_64-pc-windows-msvc\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release;D:\yara-x\target\x86_64-pc-windows-msvc\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -170,7 +170,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>yara_x_capi.lib;wintrust.lib;Psapi.lib;ws2_32.lib;advapi32.lib;userenv.lib;bcrypt.lib;ntdll.lib;Crypt32.lib;Secur32.lib;Advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Users\tzema\Downloads\yara-x-main\yara-x-main\target\x86_64-pc-windows-msvc\release;D:\yara-x\target\x86_64-pc-windows-msvc\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release;D:\yara-x\target\x86_64-pc-windows-msvc\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
