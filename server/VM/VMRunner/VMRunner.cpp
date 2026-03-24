@@ -1,7 +1,10 @@
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <fstream>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -11,6 +14,108 @@
 #include "Constants.hpp"
 #include "LogName.hpp"
 #include "Utills.hpp"
+
+namespace fs = std::filesystem;
+
+namespace {
+
+constexpr std::string_view WARM_LOCKS_DIR_NAME = ".warm-locks";
+constexpr std::string_view WARM_STATE_FILE_NAME = ".warm-state";
+
+enum class WarmSandboxState {
+  Cold,
+  Preparing,
+  Ready,
+  Busy,
+  Failed
+};
+
+struct SandboxPaths {
+  std::string sandboxId;
+  fs::path sandboxDir;
+  std::string sandboxVmxRaw;
+  std::string sandboxVmx;
+  fs::path hostShared;
+};
+
+class ScopedStepTimer {
+ public:
+  explicit ScopedStepTimer(std::string label)
+      : label_(std::move(label)),
+        start_(std::chrono::steady_clock::now()) {}
+
+  ~ScopedStepTimer() {
+    const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start_);
+    std::cout << "    [timing] " << label_ << ": "
+              << elapsedMs.count() << "ms" << std::endl;
+  }
+
+ private:
+  std::string label_;
+  std::chrono::steady_clock::time_point start_;
+};
+
+class SandboxLock {
+ public:
+  SandboxLock() = default;
+
+  SandboxLock(const SandboxLock &) = delete;
+  SandboxLock &operator=(const SandboxLock &) = delete;
+
+  SandboxLock(SandboxLock &&other) noexcept
+      : lockPath_(std::move(other.lockPath_)),
+        locked_(std::exchange(other.locked_, false)) {}
+
+  SandboxLock &operator=(SandboxLock &&other) noexcept {
+    if (this != &other) {
+      release();
+      lockPath_ = std::move(other.lockPath_);
+      locked_ = std::exchange(other.locked_, false);
+    }
+    return *this;
+  }
+
+  ~SandboxLock() {
+    release();
+  }
+
+  [[nodiscard]] static std::optional<SandboxLock> tryAcquire(
+      const fs::path &poolRoot,
+      const std::string &sandboxId) {
+    std::error_code ec;
+    const fs::path locksDir = poolRoot / std::string(WARM_LOCKS_DIR_NAME);
+    fs::create_directories(locksDir, ec);
+    if (ec) {
+      return std::nullopt;
+    }
+
+    const fs::path lockPath = locksDir / sandboxId;
+    ec.clear();
+    if (!fs::create_directory(lockPath, ec)) {
+      return std::nullopt;
+    }
+
+    SandboxLock lock;
+    lock.lockPath_ = lockPath;
+    lock.locked_ = true;
+    return lock;
+  }
+
+ private:
+  void release() {
+    if (!locked_) {
+      return;
+    }
+
+    std::error_code ec;
+    fs::remove(lockPath_, ec);
+    locked_ = false;
+  }
+
+  fs::path lockPath_;
+  bool locked_ = false;
+};
 
 static bool reportSelfTest(bool condition, std::string_view name) {
   if (condition) {
@@ -77,154 +182,263 @@ static int runSelfTests() {
   return allPassed ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
-class ScopedStepTimer {
- public:
-  explicit ScopedStepTimer(std::string label)
-      : label_(std::move(label)),
-        start_(std::chrono::steady_clock::now()) {}
+SandboxPaths buildSandboxPaths(const std::string &sandboxId) {
+  SandboxPaths paths;
+  paths.sandboxId = sandboxId;
+  paths.sandboxDir = fs::path(std::string(SANDBOXES_DIRECTORY_PATH)) / sandboxId;
+  paths.sandboxVmxRaw = (paths.sandboxDir / (sandboxId + ".vmx")).string();
+  paths.sandboxVmx = Utills::ensureQuoted(paths.sandboxVmxRaw);
+  paths.hostShared = paths.sandboxDir / "shared";
+  return paths;
+}
 
-  ~ScopedStepTimer() {
-    const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - start_);
-    std::cout << "    [timing] " << label_ << ": "
-              << elapsedMs.count() << "ms" << std::endl;
+std::vector<std::string> buildWarmSandboxIds() {
+  std::vector<std::string> sandboxIds;
+  sandboxIds.reserve(WARM_SANDBOX_COUNT);
+  for (unsigned int i = 0; i < WARM_SANDBOX_COUNT; ++i) {
+    sandboxIds.push_back(std::format("{}-{:02}", WARM_SANDBOX_PREFIX, i + 1));
+  }
+  return sandboxIds;
+}
+
+fs::path warmStateFilePath(const std::string &sandboxId) {
+  return buildSandboxPaths(sandboxId).sandboxDir / std::string(WARM_STATE_FILE_NAME);
+}
+
+WarmSandboxState readWarmSandboxState(const std::string &sandboxId,
+                                      std::string *detail = nullptr) {
+  if (detail != nullptr) {
+    detail->clear();
   }
 
- private:
-  std::string label_;
-  std::chrono::steady_clock::time_point start_;
-};
-
-int main(int argc, char *argv[]) {
-  if (argc == 2 && std::string_view(argv[1]) == "--self-test") {
-    return runSelfTests();
+  const fs::path statePath = warmStateFilePath(sandboxId);
+  if (!fs::exists(statePath)) {
+    return WarmSandboxState::Cold;
   }
 
-  // Args: <exe> <sandbox_id> <payload_host_path> [runTimeSec]
-  if (argc < 3 || argc > 4) {
-    std::cerr << "Usage: " << argv[0] << " <sandbox_id> <virus_path> [runTime]" << std::endl;
-    return EXIT_FAILURE;
-  }
-  // Utills::printBanner();
-  const std::string sandboxId(argv[1]);
-  const std::filesystem::path suspiciousHostPath(argv[2]);
-  const int runTimeSec = (argc == 4) ? std::atoi(argv[3]) : DEFUALT_TIME_CHECK;
+  std::ifstream in(statePath);
+  std::string line;
+  std::getline(in, line);
 
-  const auto vmRunPath = std::string(VM_RUN_PATH);
-  const auto baseVmx = std::string(ANALYSIS_VM_PATH);
-  const auto dirSand = std::string(SANDBOXES_DIRECTORY_PATH);
-
-  std::filesystem::path guestSharedPath(GUEST_SHARED_DIR);
-  guestSharedPath = guestSharedPath.lexically_normal();
-  const std::string sharedFolderName = guestSharedPath.filename().string();
-
-  // Per-sandbox VMX path (quoted for vmrun)
-  const std::string sandboxVmxRaw =
-      std::format(R"({}\{}\{}.vmx)", dirSand, sandboxId, sandboxId);
-  const std::string sandboxVmx = Utills::ensureQuoted(sandboxVmxRaw);
-
-  const std::filesystem::path vmDir = std::filesystem::path(sandboxVmxRaw).parent_path();
-  const std::filesystem::path hostShared = vmDir / "shared";
-
-  if (!std::filesystem::exists(hostShared)) {
-    std::error_code ec2;
-    std::filesystem::create_directories(hostShared, ec2);
-    if (ec2) {
-      std::cerr << "\tFAIL create host shared dir '" << hostShared.string()
-                << "': " << ec2.message() << std::endl;
-      return EXIT_FAILURE;
+  if (line.rfind("busy:", 0) == 0) {
+    if (detail != nullptr) {
+      *detail = line.substr(5);
     }
+    return WarmSandboxState::Busy;
+  }
+  if (line == "preparing") {
+    return WarmSandboxState::Preparing;
+  }
+  if (line == "ready") {
+    return WarmSandboxState::Ready;
+  }
+  if (line == "failed") {
+    return WarmSandboxState::Failed;
+  }
+  return WarmSandboxState::Cold;
+}
+
+bool writeWarmSandboxState(const std::string &sandboxId,
+                           WarmSandboxState state,
+                           std::string_view detail = {}) {
+  const fs::path statePath = warmStateFilePath(sandboxId);
+  std::error_code ec;
+  fs::create_directories(statePath.parent_path(), ec);
+  if (ec) {
+    return false;
   }
 
-  // Resolve host paths we will copy from
-  const std::string pmHostAbs = std::filesystem::absolute(std::string(PM_FILE_PATH)).string();
-  const std::string dllinjectorHostAbs = std::filesystem::absolute(std::string(DLL_INJECTOR_FILE_PATH)).string();
-  const std::string processRunnerHostAbs = std::filesystem::absolute(std::string(PROCCES_RUNNER_FILE_PATH)).string();
-  const std::string suspiciousHostAbs = std::filesystem::absolute(suspiciousHostPath).string();
+  if (state == WarmSandboxState::Cold) {
+    fs::remove(statePath, ec);
+    return true;
+  }
 
-  // Guest paths
-  const auto guestWorkDir = std::string(SUSPICIOUS_WORKDIR_GUEST);
-  const auto guestPmPath = std::string(PM_FILE_PATH_GUEST);
-  const auto guestDllinjectorPath = std::string(DLL_INJECTOR_FILE_PATH_GUEST);
-  const auto guestProcessRunnerPath = std::string(PROCCES_RUNNER_FILE_PATH_GUEST);
-  const std::string guestSuspectedFilePath =
-      (std::filesystem::path(guestWorkDir) /
-       std::filesystem::path(suspiciousHostPath).filename())
-          .string();
+  std::ofstream out(statePath, std::ios::trunc);
+  if (!out) {
+    return false;
+  }
 
-  const std::string guestLogPath =
-      (std::filesystem::path(GUEST_SHARED_DIR) / std::filesystem::path(SHARE_FILE_NAME)).string();
+  switch (state) {
+  case WarmSandboxState::Preparing:
+    out << "preparing";
+    break;
+  case WarmSandboxState::Ready:
+    out << "ready";
+    break;
+  case WarmSandboxState::Busy:
+    out << "busy:" << detail;
+    break;
+  case WarmSandboxState::Failed:
+    out << "failed";
+    break;
+  case WarmSandboxState::Cold:
+    break;
+  }
 
-  const std::string hostLogPath =
-      (hostShared / std::filesystem::path(SHARE_FILE_NAME)).string();
-  const auto totalStart = std::chrono::steady_clock::now();
+  return static_cast<bool>(out);
+}
+
+std::optional<std::string> claimReadyWarmSandbox(const fs::path &poolRoot,
+                                                 const std::string &scanId) {
+  for (const auto &sandboxId : buildWarmSandboxIds()) {
+    auto lock = SandboxLock::tryAcquire(poolRoot, sandboxId);
+    if (!lock.has_value()) {
+      continue;
+    }
+
+    if (readWarmSandboxState(sandboxId) != WarmSandboxState::Ready) {
+      continue;
+    }
+
+    if (!writeWarmSandboxState(sandboxId, WarmSandboxState::Busy, scanId)) {
+      continue;
+    }
+
+    return sandboxId;
+  }
+
+  return std::nullopt;
+}
+
+void markWarmSandboxState(const fs::path &poolRoot,
+                          const std::string &sandboxId,
+                          WarmSandboxState state,
+                          std::string_view detail = {}) {
+  if (auto lock = SandboxLock::tryAcquire(poolRoot, sandboxId); lock.has_value()) {
+    (void)writeWarmSandboxState(sandboxId, state, detail);
+  }
+}
+
+bool ensureDirectory(const fs::path &path, std::string_view label) {
+  std::error_code ec;
+  fs::create_directories(path, ec);
+  if (ec) {
+    std::cerr << "\tFAIL create " << label << " '" << path.string()
+              << "': " << ec.message() << std::endl;
+    return false;
+  }
+  return true;
+}
+
+bool stopSandboxIfRunning(const std::string &vmRunPath,
+                          const SandboxPaths &paths) {
+  const auto powerState = Utills::getVmPowerState(vmRunPath, paths.sandboxVmx);
+  if (powerState != Utills::VmPowerState::Running) {
+    return true;
+  }
+  return Utills::closeVM(vmRunPath, paths.sandboxVmx, paths.sandboxId);
+}
+
+bool copyFileToGuest(const std::string &vmRunPath,
+                     const std::string &sandboxVmx,
+                     const std::string &hostPath,
+                     const std::string &guestPath,
+                     std::string_view label) {
+  const std::string cmd = std::format(
+      R"({} -T ws -gu {} -gp {} CopyFileFromHostToGuest {} {} {})",
+      vmRunPath,
+      std::string(GUEST_USER),
+      std::string(GUEST_PASS),
+      sandboxVmx,
+      Utills::ensureQuoted(hostPath),
+      Utills::ensureQuoted(guestPath));
+  const int rc = Utills::executeAndWaitRC(cmd);
+  if (rc != 0) {
+    std::cerr << "\tFAIL copy " << label << " rc=" << rc << std::endl;
+    return false;
+  }
+  return true;
+}
+
+bool ensureGuestSupportFile(const std::string &vmRunPath,
+                            const std::string &sandboxVmx,
+                            const std::string &hostPath,
+                            const std::string &guestPath,
+                            std::string_view label) {
+  if (Utills::guestPathExists(vmRunPath, sandboxVmx, guestPath)) {
+    return true;
+  }
+  return copyFileToGuest(vmRunPath, sandboxVmx, hostPath, guestPath, label);
+}
+
+bool prepareSandboxEnvironment(const std::string &vmRunPath,
+                               const std::string &baseVmx,
+                               const SandboxPaths &paths,
+                               const std::string &guestWorkDir,
+                               const std::string &sharedFolderName,
+                               const std::string &pmHostAbs,
+                               const std::string &guestPmPath,
+                               const std::string &dllInjectorHostAbs,
+                               const std::string &guestDllInjectorPath,
+                               const std::string &processRunnerHostAbs,
+                               const std::string &guestProcessRunnerPath) {
+  if (!ensureDirectory(paths.hostShared, "host shared dir")) {
+    return false;
+  }
+
   std::cout << "[1.0/7] Clone linked VM if needed" << std::endl;
   {
     ScopedStepTimer timer("clone linked VM");
-    // Create linked clone if it does not exist yet
-    if (!std::filesystem::exists(sandboxVmxRaw)) {
+    if (!fs::exists(paths.sandboxVmxRaw)) {
       const std::string cmd = std::format(
           R"({} -T ws clone {} {} linked -cloneName={})",
           vmRunPath,
           baseVmx,
-          sandboxVmx,
-          sandboxId);
+          paths.sandboxVmx,
+          paths.sandboxId);
 
-      int rc = Utills::executeAndWaitRC(cmd);
+      const int rc = Utills::executeAndWaitRC(cmd);
       if (rc != 0) {
         std::cerr << "\tFAIL clone rc=" << rc << std::endl;
-        return EXIT_FAILURE;
+        return false;
       }
     }
   }
 
-  std::cout << "[1.1/7] Start VM" << std::endl;
+  std::cout << "[1.1/7] Start VM if needed" << std::endl;
   {
     ScopedStepTimer timer("start VM");
-    const std::string cmd = std::format(
-        R"({} -T ws start {} {})",
-        vmRunPath,
-        sandboxVmx,
-        VM_START_MODE);
-    int rc = Utills::executeAndWaitRC(cmd);
-    if (rc != 0) {
-      std::cerr << "\tFAIL start rc=" << rc << std::endl;
-      Utills::closeVM(vmRunPath, sandboxVmx, sandboxId);
-      return EXIT_FAILURE;
+    const auto powerState = Utills::getVmPowerState(vmRunPath, paths.sandboxVmx);
+    if (powerState != Utills::VmPowerState::Running) {
+      const std::string cmd = std::format(
+          R"({} -T ws start {} {})",
+          vmRunPath,
+          paths.sandboxVmx,
+          VM_START_MODE);
+      const int rc = Utills::executeAndWaitRC(cmd);
+      if (rc != 0) {
+        std::cerr << "\tFAIL start rc=" << rc << std::endl;
+        return false;
+      }
     }
   }
 
   std::cout << "[1.1.b/7] Configure Shared Folder" << std::endl;
   {
     ScopedStepTimer timer("configure shared folder");
-    if (!sharedFolderName.empty()) {
-      {
-        const std::string cmd = std::format(
-            R"({} -T ws removeSharedFolder {} {})",
-            vmRunPath,
-            sandboxVmx,
-            sharedFolderName);
-        // ignore rc
-        (void)Utills::executeAndWaitRC(cmd);
-      }
-
-      const std::string cmd = std::format(
-          R"({} -T ws addSharedFolder {} {} {})",
-          vmRunPath,
-          sandboxVmx,
-          sharedFolderName,
-          Utills::ensureQuoted(hostShared.string()));
-      int rc = Utills::executeAndWaitRC(cmd);
-      if (rc != 0) {
-        std::cerr << "\tFAIL addSharedFolder rc=" << rc << std::endl;
-        Utills::closeVM(vmRunPath, sandboxVmx, sandboxId);
-        return EXIT_FAILURE;
-      }
-    } else {
+    if (sharedFolderName.empty()) {
       std::cerr << "\tFAIL: could not derive shared folder name from GUEST_SHARED_DIR='"
                 << GUEST_SHARED_DIR << "'" << std::endl;
-      Utills::closeVM(vmRunPath, sandboxVmx, sandboxId);
-      return EXIT_FAILURE;
+      return false;
+    }
+
+    const std::string removeCmd = std::format(
+        R"({} -T ws removeSharedFolder {} {})",
+        vmRunPath,
+        paths.sandboxVmx,
+        sharedFolderName);
+    (void)Utills::executeAndWaitRC(removeCmd);
+
+    const std::string addCmd = std::format(
+        R"({} -T ws addSharedFolder {} {} {})",
+        vmRunPath,
+        paths.sandboxVmx,
+        sharedFolderName,
+        Utills::ensureQuoted(paths.hostShared.string()));
+    const int rc = Utills::executeAndWaitRC(addCmd);
+    if (rc != 0) {
+      std::cerr << "\tFAIL addSharedFolder rc=" << rc << std::endl;
+      return false;
     }
   }
 
@@ -234,45 +448,40 @@ int main(int argc, char *argv[]) {
     ScopedStepTimer timer("wait for VMware Tools");
     if (!Utills::waitForTools(
             vmRunPath,
-            sandboxVmx,
+            paths.sandboxVmx,
             static_cast<int>(VM_TOOLS_MAX_RETRIES),
             static_cast<int>(VM_TOOLS_SLEEP_MS))) {
       std::cerr << "\tFAIL: VMware Tools not ready" << std::endl;
-      Utills::closeVM(vmRunPath, sandboxVmx, sandboxId);
-      return EXIT_FAILURE;
+      return false;
     }
   }
 
-  // Shared folders must be enabled on a powered-on VM for the guest
   std::cout << "[1.3/7] Enable shared folders in guest" << std::endl;
   {
     ScopedStepTimer timer("enable shared folders");
     const std::string enableCmd = std::format(
         R"({} -T ws enableSharedFolders {})",
         vmRunPath,
-        sandboxVmx);
-    int rc = Utills::executeAndWaitRC(enableCmd);
+        paths.sandboxVmx);
+    const int rc = Utills::executeAndWaitRC(enableCmd);
     if (rc != 0) {
       std::cerr << "\tWARN enableSharedFolders rc=" << rc
                 << " (shared folders may already be enabled)" << std::endl;
     }
 
-    // Verify that the shared folder path is actually visible in the guest
     const std::string checkCmd = std::format(
         R"({} -T ws -gu {} -gp {} directoryExistsInGuest {} {})",
         vmRunPath,
         std::string(GUEST_USER),
         std::string(GUEST_PASS),
-        sandboxVmx,
+        paths.sandboxVmx,
         Utills::ensureQuoted(std::string(GUEST_SHARED_DIR)));
-
-    int checkRc = Utills::executeAndWaitRC(checkCmd);
+    const int checkRc = Utills::executeAndWaitRC(checkCmd);
     if (checkRc != 0) {
       std::cerr << "\tFAIL: shared folder '" << GUEST_SHARED_DIR
                 << "' is not accessible inside the guest (rc=" << checkRc << ")"
                 << std::endl;
-      Utills::closeVM(vmRunPath, sandboxVmx, sandboxId);
-      return EXIT_FAILURE;
+      return false;
     }
   }
 
@@ -284,109 +493,294 @@ int main(int argc, char *argv[]) {
         vmRunPath,
         std::string(GUEST_USER),
         std::string(GUEST_PASS),
-        sandboxVmx,
+        paths.sandboxVmx,
         Utills::ensureQuoted(guestWorkDir));
-
-    int existsRc = Utills::executeAndWaitRC(existsCmd);
-
+    const int existsRc = Utills::executeAndWaitRC(existsCmd);
     if (existsRc != 0) {
       const std::string createCmd = std::format(
           R"({} -T ws -gu {} -gp {} createDirectoryInGuest {} {})",
           vmRunPath,
           std::string(GUEST_USER),
           std::string(GUEST_PASS),
-          sandboxVmx,
+          paths.sandboxVmx,
           Utills::ensureQuoted(guestWorkDir));
-
-      int createRc = Utills::executeAndWaitRC(createCmd);
+      const int createRc = Utills::executeAndWaitRC(createCmd);
       if (createRc != 0) {
         std::cerr << "\tFAIL createDirectory rc=" << createRc
                   << " (directory does not exist and cannot be created)"
                   << std::endl;
-        Utills::closeVM(vmRunPath, sandboxVmx, sandboxId);
-        return EXIT_FAILURE;
+        return false;
       }
     }
   }
-  /************************** copy files *******************************/
-  std::cout << "[2.1/7] Copy monitor -> guest" << std::endl;
+
+  std::cout << "[2.1/7] Ensure monitor exists in guest" << std::endl;
   {
-    ScopedStepTimer timer("copy monitor");
-    const std::string cmd = std::format(R"({} -T ws -gu {} -gp {} CopyFileFromHostToGuest {} {} {})",
-                                        vmRunPath, std::string(GUEST_USER), std::string(GUEST_PASS),
-                                        sandboxVmx,
-                                        Utills::ensureQuoted(pmHostAbs),
-                                        Utills::ensureQuoted(guestPmPath));
-    int rc = Utills::executeAndWaitRC(cmd);
-    if (rc != 0) {
-      std::cerr << "\tFAIL copy monitor rc=" << rc << std::endl;
-      Utills::closeVM(vmRunPath, sandboxVmx, sandboxId);
-      return EXIT_FAILURE;
-    }
-  }
-  std::cout << "[2.2/7] Copy suspicious -> guest" << std::endl;
-  {
-    ScopedStepTimer timer("copy suspicious payload");
-    const std::string cmd = std::format(R"({} -T ws -gu {} -gp {} CopyFileFromHostToGuest {} {} {})",
-                                        vmRunPath, std::string(GUEST_USER), std::string(GUEST_PASS),
-                                        sandboxVmx,
-                                        Utills::ensureQuoted(suspiciousHostAbs),
-                                        Utills::ensureQuoted(guestSuspectedFilePath));
-    int rc = Utills::executeAndWaitRC(cmd);
-    if (rc != 0) {
-      std::cerr << "\tFAIL copy payload rc=" << rc << std::endl;
-      Utills::closeVM(vmRunPath, sandboxVmx, sandboxId);
-      return EXIT_FAILURE;
-    }
-  }
-  std::cout << "[2.3/7] Copy dllinjector -> guest" << std::endl;
-  {
-    ScopedStepTimer timer("copy DLL injector");
-    const std::string cmd = std::format(R"({} -T ws -gu {} -gp {} CopyFileFromHostToGuest {} {} {})",
-                                        vmRunPath, std::string(GUEST_USER), std::string(GUEST_PASS),
-                                        sandboxVmx,
-                                        Utills::ensureQuoted(dllinjectorHostAbs),
-                                        Utills::ensureQuoted(guestDllinjectorPath));
-    int rc = Utills::executeAndWaitRC(cmd);
-    if (rc != 0) {
-      std::cerr << "\tFAIL copy payload rc=" << rc << std::endl;
-      Utills::closeVM(vmRunPath, sandboxVmx, sandboxId);
-      return EXIT_FAILURE;
-    }
-  }
-  std::cout << "[2.4/7] Copy processRunner -> guest" << std::endl;
-  {
-    ScopedStepTimer timer("copy process runner");
-    const std::string cmd = std::format(R"({} -T ws -gu {} -gp {} CopyFileFromHostToGuest {} {} {})",
-                                        vmRunPath, std::string(GUEST_USER), std::string(GUEST_PASS),
-                                        sandboxVmx,
-                                        Utills::ensureQuoted(processRunnerHostAbs),
-                                        Utills::ensureQuoted(guestProcessRunnerPath));
-    int rc = Utills::executeAndWaitRC(cmd);
-    if (rc != 0) {
-      std::cerr << "\tFAIL copy payload rc=" << rc << std::endl;
-      Utills::closeVM(vmRunPath, sandboxVmx, sandboxId);
-      return EXIT_FAILURE;
+    ScopedStepTimer timer("ensure monitor");
+    if (!ensureGuestSupportFile(
+            vmRunPath, paths.sandboxVmx, pmHostAbs, guestPmPath, "monitor")) {
+      return false;
     }
   }
 
-  /************************** start mointor *******************************/
+  std::cout << "[2.2/7] Ensure DLL injector exists in guest" << std::endl;
+  {
+    ScopedStepTimer timer("ensure DLL injector");
+    if (!ensureGuestSupportFile(
+            vmRunPath,
+            paths.sandboxVmx,
+            dllInjectorHostAbs,
+            guestDllInjectorPath,
+            "DLL injector")) {
+      return false;
+    }
+  }
+
+  std::cout << "[2.3/7] Ensure process runner exists in guest" << std::endl;
+  {
+    ScopedStepTimer timer("ensure process runner");
+    if (!ensureGuestSupportFile(
+            vmRunPath,
+            paths.sandboxVmx,
+            processRunnerHostAbs,
+            guestProcessRunnerPath,
+            "process runner")) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool copyWarmSandboxResult(const std::string &scanId,
+                           const std::string &sandboxId,
+                           const fs::path &hostLogPath) {
+  if (scanId == sandboxId) {
+    return true;
+  }
+
+  const fs::path targetSharedDir =
+      fs::path(std::string(SANDBOXES_DIRECTORY_PATH)) / scanId / "shared";
+  if (!ensureDirectory(targetSharedDir, "scan result dir")) {
+    return false;
+  }
+
+  std::error_code ec;
+  fs::copy_file(
+      hostLogPath,
+      targetSharedDir / fs::path(std::string(SHARE_FILE_NAME)),
+      fs::copy_options::overwrite_existing,
+      ec);
+  if (ec) {
+    std::cerr << "\tFAIL copy result log to scan dir: " << ec.message()
+              << std::endl;
+    return false;
+  }
+  return true;
+}
+
+bool prepareWarmSandbox(const std::string &sandboxId) {
+  const auto vmRunPath = std::string(VM_RUN_PATH);
+  const auto baseVmx = std::string(ANALYSIS_VM_PATH);
+  const auto guestWorkDir = std::string(SUSPICIOUS_WORKDIR_GUEST);
+
+  fs::path guestSharedPath(GUEST_SHARED_DIR);
+  guestSharedPath = guestSharedPath.lexically_normal();
+  const std::string sharedFolderName = guestSharedPath.filename().string();
+
+  const std::string pmHostAbs =
+      fs::absolute(std::string(PM_FILE_PATH)).string();
+  const std::string dllInjectorHostAbs =
+      fs::absolute(std::string(DLL_INJECTOR_FILE_PATH)).string();
+  const std::string processRunnerHostAbs =
+      fs::absolute(std::string(PROCCES_RUNNER_FILE_PATH)).string();
+
+  const auto guestPmPath = std::string(PM_FILE_PATH_GUEST);
+  const auto guestDllInjectorPath = std::string(DLL_INJECTOR_FILE_PATH_GUEST);
+  const auto guestProcessRunnerPath = std::string(PROCCES_RUNNER_FILE_PATH_GUEST);
+
+  const SandboxPaths paths = buildSandboxPaths(sandboxId);
+
+  std::cout << "[warmup] Preparing sandbox " << sandboxId << std::endl;
+  {
+    ScopedStepTimer timer("reset warm sandbox");
+    if (!stopSandboxIfRunning(vmRunPath, paths)) {
+      return false;
+    }
+
+    std::error_code ec;
+    fs::remove_all(paths.sandboxDir, ec);
+    if (ec) {
+      std::cerr << "\tFAIL remove sandbox dir '" << paths.sandboxDir.string()
+                << "': " << ec.message() << std::endl;
+      return false;
+    }
+  }
+
+  return prepareSandboxEnvironment(
+      vmRunPath,
+      baseVmx,
+      paths,
+      guestWorkDir,
+      sharedFolderName,
+      pmHostAbs,
+      guestPmPath,
+      dllInjectorHostAbs,
+      guestDllInjectorPath,
+      processRunnerHostAbs,
+      guestProcessRunnerPath);
+}
+
+int prepareWarmPool() {
+  if (WARM_SANDBOX_COUNT == 0) {
+    std::cout << "[warmup] Warm sandbox pool disabled" << std::endl;
+    return EXIT_SUCCESS;
+  }
+
+  const fs::path poolRoot = fs::path(std::string(SANDBOXES_DIRECTORY_PATH));
+  bool allSucceeded = true;
+
+  for (const auto &sandboxId : buildWarmSandboxIds()) {
+    auto lock = SandboxLock::tryAcquire(poolRoot, sandboxId);
+    if (!lock.has_value()) {
+      std::cout << "[warmup] Skip " << sandboxId
+                << " because another workflow already owns it" << std::endl;
+      continue;
+    }
+
+    const auto currentState = readWarmSandboxState(sandboxId);
+    if (currentState == WarmSandboxState::Busy ||
+        currentState == WarmSandboxState::Preparing) {
+      std::cout << "[warmup] Skip " << sandboxId
+                << " because it is not currently available" << std::endl;
+      continue;
+    }
+
+    if (!writeWarmSandboxState(sandboxId, WarmSandboxState::Preparing)) {
+      std::cerr << "[warmup] Failed to mark " << sandboxId
+                << " as preparing" << std::endl;
+      allSucceeded = false;
+      continue;
+    }
+
+    lock.reset();
+
+    const bool prepared = prepareWarmSandbox(sandboxId);
+    markWarmSandboxState(
+        poolRoot,
+        sandboxId,
+        prepared ? WarmSandboxState::Ready : WarmSandboxState::Failed);
+    allSucceeded &= prepared;
+  }
+
+  return allSucceeded ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+int runScan(const std::string &scanId,
+            const fs::path &suspiciousHostPath,
+            int runTimeSec) {
+  const auto vmRunPath = std::string(VM_RUN_PATH);
+  const auto baseVmx = std::string(ANALYSIS_VM_PATH);
+  const auto poolRoot = fs::path(std::string(SANDBOXES_DIRECTORY_PATH));
+
+  fs::path guestSharedPath(GUEST_SHARED_DIR);
+  guestSharedPath = guestSharedPath.lexically_normal();
+  const std::string sharedFolderName = guestSharedPath.filename().string();
+
+  const auto guestWorkDir = std::string(SUSPICIOUS_WORKDIR_GUEST);
+  const auto guestPmPath = std::string(PM_FILE_PATH_GUEST);
+  const auto guestDllInjectorPath = std::string(DLL_INJECTOR_FILE_PATH_GUEST);
+  const auto guestProcessRunnerPath = std::string(PROCCES_RUNNER_FILE_PATH_GUEST);
+
+  const std::string pmHostAbs =
+      fs::absolute(std::string(PM_FILE_PATH)).string();
+  const std::string dllInjectorHostAbs =
+      fs::absolute(std::string(DLL_INJECTOR_FILE_PATH)).string();
+  const std::string processRunnerHostAbs =
+      fs::absolute(std::string(PROCCES_RUNNER_FILE_PATH)).string();
+  const std::string suspiciousHostAbs =
+      fs::absolute(suspiciousHostPath).string();
+
+  const std::optional<std::string> warmSandboxId =
+      claimReadyWarmSandbox(poolRoot, scanId);
+  const std::string sandboxId =
+      warmSandboxId.has_value() ? *warmSandboxId : scanId;
+  const bool usedWarmSandbox = warmSandboxId.has_value();
+
+  const SandboxPaths paths = buildSandboxPaths(sandboxId);
+  const std::string guestSuspectedFilePath =
+      (fs::path(guestWorkDir) /
+       (scanId + "_" + suspiciousHostPath.filename().string()))
+          .string();
+  const std::string guestLogPath =
+      (fs::path(GUEST_SHARED_DIR) / fs::path(std::string(SHARE_FILE_NAME))).string();
+  const fs::path hostLogPath = paths.hostShared / fs::path(std::string(SHARE_FILE_NAME));
+
+  std::cout << (usedWarmSandbox ? "[pool] Using ready warm sandbox: "
+                                : "[pool] No ready warm sandbox, using dedicated sandbox: ")
+            << sandboxId << std::endl;
+
+  const auto totalStart = std::chrono::steady_clock::now();
+
+  auto failRun = [&](std::string_view message) -> int {
+    std::cerr << message << std::endl;
+    (void)stopSandboxIfRunning(vmRunPath, paths);
+    if (usedWarmSandbox) {
+      markWarmSandboxState(poolRoot, sandboxId, WarmSandboxState::Failed);
+    }
+    return EXIT_FAILURE;
+  };
+
+  if (!prepareSandboxEnvironment(
+          vmRunPath,
+          baseVmx,
+          paths,
+          guestWorkDir,
+          sharedFolderName,
+          pmHostAbs,
+          guestPmPath,
+          dllInjectorHostAbs,
+          guestDllInjectorPath,
+          processRunnerHostAbs,
+          guestProcessRunnerPath)) {
+    return failRun("\tFAIL prepare sandbox environment");
+  }
+
+  {
+    ScopedStepTimer timer("clean previous shared log");
+    std::error_code ec;
+    fs::remove(hostLogPath, ec);
+  }
+
+  std::cout << "[2.4/7] Copy suspicious -> guest" << std::endl;
+  {
+    ScopedStepTimer timer("copy suspicious payload");
+    if (!copyFileToGuest(
+            vmRunPath,
+            paths.sandboxVmx,
+            suspiciousHostAbs,
+            guestSuspectedFilePath,
+            "payload")) {
+      return failRun("\tFAIL copy payload");
+    }
+  }
+
   std::cout << "[3.0/7] Start monitor in guest" << std::endl;
   {
     ScopedStepTimer timer("start monitor");
     const std::string cmd = std::format(
-        R"({} -T ws -gu {} -gp {} runProgramInGuest {} -noWait  {} {} {}{})",
-        vmRunPath, std::string(GUEST_USER), std::string(GUEST_PASS),
-        sandboxVmx,
+        R"({} -T ws -gu {} -gp {} runProgramInGuest {} -noWait {} {} {}{})",
+        vmRunPath,
+        std::string(GUEST_USER),
+        std::string(GUEST_PASS),
+        paths.sandboxVmx,
         Utills::ensureQuoted(guestPmPath),
         Utills::ensureQuoted(guestSuspectedFilePath),
         Utills::ensureQuoted(guestLogPath),
         (runTimeSec > 0 ? std::format(" {}", runTimeSec) : std::string{}));
-    int rc = Utills::executeAndWaitRC(cmd);
+    const int rc = Utills::executeAndWaitRC(cmd);
     if (rc != 0) {
-      std::cerr << "\tFAIL run monitor rc=" << rc << std::endl;
-      Utills::closeVM(vmRunPath, sandboxVmx, sandboxId);
-      return EXIT_FAILURE;
+      return failRun(std::format("\tFAIL run monitor rc={}", rc));
     }
   }
 
@@ -394,20 +788,18 @@ int main(int argc, char *argv[]) {
   {
     ScopedStepTimer timer("start process runner");
     const std::string cmd = std::format(
-        R"({} -T ws -gu {} -gp {} runProgramInGuest  {} -noWait {} {} {} {})",
+        R"({} -T ws -gu {} -gp {} runProgramInGuest {} -noWait {} {} {} {})",
         vmRunPath,
         std::string(GUEST_USER),
         std::string(GUEST_PASS),
-        sandboxVmx,
+        paths.sandboxVmx,
         Utills::ensureQuoted(guestProcessRunnerPath),
         Utills::ensureQuoted(guestSuspectedFilePath),
-        Utills::ensureQuoted(guestDllinjectorPath),
+        Utills::ensureQuoted(guestDllInjectorPath),
         Utills::ensureQuoted(guestWorkDir));
-    int rc = Utills::executeAndWaitRC(cmd);
+    const int rc = Utills::executeAndWaitRC(cmd);
     if (rc != 0) {
-      std::cerr << "\tFAIL run payload rc=" << rc << std::endl;
-      Utills::closeVM(vmRunPath, sandboxVmx, sandboxId);
-      return EXIT_FAILURE;
+      return failRun(std::format("\tFAIL run payload rc={}", rc));
     }
   }
 
@@ -417,30 +809,33 @@ int main(int argc, char *argv[]) {
     std::this_thread::sleep_for(std::chrono::seconds(runTimeSec));
   }
 
-  std::cout << "[5/7] Copy log guest->host" << std::endl;
+  std::cout << "[5/7] Verify shared log availability" << std::endl;
   {
     ScopedStepTimer timer("verify shared log availability");
     std::cout << "\tExpected guest DB path: " << guestLogPath << std::endl;
-    std::cout << "\tExpected host  DB path: " << hostLogPath << std::endl;
+    std::cout << "\tExpected host  DB path: " << hostLogPath.string() << std::endl;
 
-    if (std::filesystem::exists(hostLogPath)) {
-      std::cout << "\tDB file exists on host." << std::endl;
-    } else {
-      std::cerr << "\tWARN: DB file NOT found on host path: "
-                << hostLogPath << std::endl;
-      Utills::closeVM(vmRunPath, sandboxVmx, sandboxId);
-      return EXIT_FAILURE;
+    if (!fs::exists(hostLogPath)) {
+      return failRun(std::format(
+          "\tWARN: DB file NOT found on host path: {}",
+          hostLogPath.string()));
     }
+  }
+
+  if (!copyWarmSandboxResult(scanId, sandboxId, hostLogPath)) {
+    return failRun("\tFAIL copy result log");
   }
 
   std::cout << "[6/7] Shutdown VM" << std::endl;
   {
     ScopedStepTimer timer("shutdown VM");
-    if (!Utills::closeVM(vmRunPath, sandboxVmx, sandboxId)) {
-      std::wcerr << "Something went wrong with stop." << std::endl;
-      Utills::printBanner(true);
-      return EXIT_FAILURE;
+    if (!stopSandboxIfRunning(vmRunPath, paths)) {
+      return failRun("\tFAIL stop VM");
     }
+  }
+
+  if (usedWarmSandbox) {
+    markWarmSandboxState(poolRoot, sandboxId, WarmSandboxState::Cold);
   }
 
   const auto totalElapsedMs =
@@ -451,4 +846,42 @@ int main(int argc, char *argv[]) {
   std::cout << "Done." << std::endl;
   Utills::printBanner(true);
   return EXIT_SUCCESS;
+}
+
+} // namespace
+
+int main(int argc, char *argv[]) {
+  if (argc == 2 && std::string_view(argv[1]) == "--self-test") {
+    return runSelfTests();
+  }
+
+  if (argc == 2 && std::string_view(argv[1]) == "--prepare-warm-pool") {
+    return prepareWarmPool();
+  }
+
+  if (argc == 3 && std::string_view(argv[1]) == "--prepare") {
+    const fs::path poolRoot = fs::path(std::string(SANDBOXES_DIRECTORY_PATH));
+    const std::string sandboxId(argv[2]);
+    markWarmSandboxState(poolRoot, sandboxId, WarmSandboxState::Preparing);
+    const bool prepared = prepareWarmSandbox(sandboxId);
+    markWarmSandboxState(
+        poolRoot,
+        sandboxId,
+        prepared ? WarmSandboxState::Ready : WarmSandboxState::Failed);
+    return prepared ? EXIT_SUCCESS : EXIT_FAILURE;
+  }
+
+  if (argc < 3 || argc > 4) {
+    std::cerr << "Usage: " << argv[0]
+              << " <scan_id> <virus_path> [runTime]\n"
+              << "       " << argv[0] << " --prepare <sandbox_id>\n"
+              << "       " << argv[0] << " --prepare-warm-pool" << std::endl;
+    return EXIT_FAILURE;
+  }
+
+  const std::string scanId(argv[1]);
+  const fs::path suspiciousHostPath(argv[2]);
+  const int runTimeSec = (argc == 4) ? std::atoi(argv[3]) : DEFUALT_TIME_CHECK;
+
+  return runScan(scanId, suspiciousHostPath, runTimeSec);
 }

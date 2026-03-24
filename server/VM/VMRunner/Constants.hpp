@@ -34,6 +34,8 @@ extern const std::string GUEST_SHARED_DIR;
 extern const unsigned int VM_TOOLS_MAX_RETRIES;
 extern const unsigned int VM_TOOLS_SLEEP_MS;
 extern const unsigned int VM_SHUTDOWN_GRACE_MS;
+extern const std::string WARM_SANDBOX_PREFIX;
+extern const unsigned int WARM_SANDBOX_COUNT;
 /*
  * Path in BOTH
  */

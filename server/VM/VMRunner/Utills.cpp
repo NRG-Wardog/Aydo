@@ -277,14 +277,8 @@ static std::string normalizeVmPathForComparison(std::string path) {
   return path;
 }
 
-enum class VmPowerState {
-  Running,
-  Stopped,
-  Unknown
-};
-
-static VmPowerState getVmPowerState(const std::string &vmRunPath,
-                                    const std::string &sandboxVmx) {
+VmPowerState getVmPowerState(const std::string &vmRunPath,
+                             const std::string &sandboxVmx) {
   std::string out;
   std::string err;
   const std::string cmd = std::format(R"({} -T ws list)", vmRunPath);

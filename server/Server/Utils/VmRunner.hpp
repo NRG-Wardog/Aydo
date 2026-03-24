@@ -9,4 +9,6 @@ namespace Utils::VmRunner {
                            const std::filesystem::path &payloadHostPath,
                            int runtimeSeconds);
 
+void warmUpPoolAsync();
+
 } // namespace Utils::VmRunner

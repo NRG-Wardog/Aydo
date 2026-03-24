@@ -5,6 +5,7 @@
 #include "Controllers/Auth.hpp"
 #include "Controllers/Sandbox.hpp"
 #include "DatabaseSetup.hpp"
+#include "Utils/VmRunner.hpp"
 
 int main() {
   // Setup the server
@@ -50,6 +51,8 @@ int main() {
 
       exit(EXIT_FAILURE);
     }
+
+    Utils::VmRunner::warmUpPoolAsync();
   });
 
   LOG_INFO << "Starting server with config from " << Constants::CONFIG_FILE;

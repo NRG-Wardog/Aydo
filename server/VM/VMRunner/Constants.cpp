@@ -90,3 +90,9 @@ const unsigned int VM_TOOLS_SLEEP_MS =
 
 const unsigned int VM_SHUTDOWN_GRACE_MS =
     getEnvUIntOrDefault("VM_SHUTDOWN_GRACE_MS", 5000);
+
+const std::string WARM_SANDBOX_PREFIX =
+    getEnvOrDefault("WARM_SANDBOX_PREFIX", "warm-sandbox");
+
+const unsigned int WARM_SANDBOX_COUNT =
+    getEnvUIntOrDefault("WARM_SANDBOX_COUNT", 1);

@@ -8,6 +8,12 @@ namespace Utills {
 
 using CommandExecutor = std::function<int(const std::string &cmd)>;
 
+enum class VmPowerState {
+  Running,
+  Stopped,
+  Unknown
+};
+
 void printBanner(bool isClosing = false);
 
 int executeAndWaitRC(const std::string &cmd,
@@ -35,6 +41,9 @@ std::string dequote(std::string s);
 bool guestPathExists(const std::string &vmRunPath,
                      const std::string &sandboxVmx,
                      std::string_view guestPath);
+
+VmPowerState getVmPowerState(const std::string &vmRunPath,
+                             const std::string &sandboxVmx);
 
 bool closeVMWithExecutor(const std::string &vmRunPath,
                          const std::string &sandboxVmx,
