@@ -10,10 +10,12 @@
 
 class KernelCommunications {
 private:
-  HANDLE m_hDevice;
+  HANDLE m_hControlDevice;
+  HANDLE m_hNotificationDevice;
 
   // Base function to send IOCTL requests to the kernel
-  bool sendIoctl(DWORD ioctlCode,
+  bool sendIoctl(HANDLE deviceHandle,
+                 DWORD ioctlCode,
                  void *inputBuffer,
                  DWORD inputSize,
                  void *outputBuffer,
@@ -41,5 +43,4 @@ public:
   bool resumeProcess(ULONG processId);
   std::optional<IOCTL_GET_PROCESS_NOTIFICATION_OUTPUT> getProcessNotification();
   bool registerSelfAsService();
-
 };

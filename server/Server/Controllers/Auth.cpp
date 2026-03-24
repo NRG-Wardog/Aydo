@@ -16,10 +16,22 @@ void API::Auth::_registerUser(
     std::function<void(const drogon::HttpResponsePtr &)> &&callback) {
   LOG_DEBUG << "Got a register user request";
 
+  constexpr const char *WEAK_PASSWORD_MESSAGE =
+      "Password is too weak (minimum 8 characters, with upper, lower, and digit).";
+
   auto jsonBody = req->getJsonObject();
 
   if (!jsonBody) {
     return callback(jsonError("Invalid JSON"));
+  }
+
+  std::string rawPassword;
+  if (jsonBody->isMember("password") && (*jsonBody)["password"].isString()) {
+    rawPassword = (*jsonBody)["password"].asString();
+  }
+
+  if (!rawPassword.empty() && !Utils::Validation::isValidPassword(rawPassword)) {
+    return callback(jsonError(WEAK_PASSWORD_MESSAGE));
   }
 
   auto email = Utils::Validation::validateField(
@@ -70,10 +82,22 @@ void API::Auth::_loginUser(const drogon::HttpRequestPtr &req,
                            std::function<void(const drogon::HttpResponsePtr &)> &&callback) {
   LOG_DEBUG << "Got a login user request";
 
+  constexpr const char *WEAK_PASSWORD_MESSAGE =
+      "Password is too weak (minimum 8 characters, with upper, lower, and digit).";
+
   auto jsonBody = req->getJsonObject();
 
   if (!jsonBody) {
     return callback(jsonError("Invalid JSON"));
+  }
+
+  std::string rawPassword;
+  if (jsonBody->isMember("password") && (*jsonBody)["password"].isString()) {
+    rawPassword = (*jsonBody)["password"].asString();
+  }
+
+  if (!rawPassword.empty() && !Utils::Validation::isValidPassword(rawPassword)) {
+    return callback(jsonError(WEAK_PASSWORD_MESSAGE));
   }
 
   auto email = Utils::Validation::validateField(
@@ -192,6 +216,7 @@ void API::Auth::_getMe(const drogon::HttpRequestPtr &req,
     }
 
     Json::Value resp;
+    resp["email"] = user->getEmail();
     resp["nickname"] = user->getNickname();
 
     callback(jsonOk(resp));

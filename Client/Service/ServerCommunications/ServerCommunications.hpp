@@ -52,6 +52,10 @@ public:
   static void initialize(const std::string &serverAddress, const std::string &authenticationToken = "", const std::string &refreshToken = "");
   static ServerCommunications &getInstance();
 
+  void updateConnectionSettings(const std::string &serverAddress,
+                                const std::string &authenticationToken,
+                                const std::string &refreshToken);
+
   [[nodiscard]] bool isServerReachable() const;
 
   bool login(const std::string &email, const std::string &password);

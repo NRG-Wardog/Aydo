@@ -15,6 +15,14 @@ type AuthResult = {
   offline?: boolean;
 };
 
+type AuthSessionResult = {
+  ok: boolean;
+  message: string;
+  email?: string;
+  nickname?: string;
+  offline?: boolean;
+};
+
 type AvBridgeApi = {
   connect: () => Promise<{ ok: boolean; message: string }>;
   disconnect: () => Promise<{ ok: boolean; message: string }>;
@@ -47,6 +55,7 @@ type AvBridgeApi = {
     nickname: string;
     serverUrl: string;
   }) => Promise<AuthResult>;
+  authSession: () => Promise<AuthSessionResult>;
   closeWindow: () => void;
   minimizeWindow: () => void;
   maximizeWindow: () => void;
@@ -71,6 +80,7 @@ try {
       ipcRenderer.invoke("fs:read-directory", dirPath),
     authLogin: (payload) => ipcRenderer.invoke("auth:login", payload),
     authRegister: (payload) => ipcRenderer.invoke("auth:register", payload),
+    authSession: () => ipcRenderer.invoke("auth:session"),
     closeWindow: () => ipcRenderer.invoke("window:close"),
     minimizeWindow: () => ipcRenderer.invoke("window:minimize"),
     maximizeWindow: () => ipcRenderer.invoke("window:maximize"),

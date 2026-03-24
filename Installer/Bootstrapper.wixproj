@@ -8,5 +8,6 @@
 
   <ItemGroup>
     <Compile Include="Bootstrapper.wxs" />
+    <PackageReference Include="WixToolset.Bal.wixext" Version="6.0.2" />
   </ItemGroup>
 </Project>

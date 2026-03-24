@@ -18,6 +18,7 @@ import type { AntivirusEngine } from "./engine";
 
 const PIPE_NAME = "\\\\.\\pipe\\AydoServicePipe";
 const RECONNECT_DELAY_MS = 3000;
+const CONNECT_TIMEOUT_MS = 2200;
 
 // Configurable defaults and thresholds
 const SERVER_DEFAULT_URL = "http://192.168.56.1";
@@ -32,6 +33,7 @@ const MAX_RUNTIME = 100;
 // Heartbeat ping generation
 const PING_BASE_MS = 10; // base ping
 const PING_VARIANCE_MS = 12; // additional random variance
+const STATUS_COMMAND_PAYLOAD = `${JSON.stringify({ command: "status" })}\n`;
 
 const ENGINE_VERSION = "client-1.0.0";
 
@@ -66,6 +68,7 @@ export type ClientEngineOptions = {
 export class ClientEngine extends EventEmitter implements AntivirusEngine {
   private socket: Socket | null = null;
   private connected = false;
+  private connectInFlight: Promise<void> | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private scanTimer: NodeJS.Timeout | null = null;
   private manualScanStartedAt: number | null = null;
@@ -119,58 +122,83 @@ export class ClientEngine extends EventEmitter implements AntivirusEngine {
       return;
     }
 
+    if (this.connectInFlight) {
+      return this.connectInFlight;
+    }
+
     this.userRequestedDisconnect = false;
-    this.attemptConnection();
+    this.connectInFlight = this.attemptConnection().finally(() => {
+      this.connectInFlight = null;
+    });
+
+    return this.connectInFlight;
   }
 
-  private attemptConnection() {
-    if (this.socket) return;
+  private attemptConnection(): Promise<void> {
+    if (this.socket) {
+      return Promise.resolve();
+    }
 
-    this.emitEvent("status", "low", "Connecting to service...", {
-      state: "connecting",
-    });
-
-    const socket = createConnection(PIPE_NAME, () => {
-      this.socket = socket;
-      this.connected = true;
-      this.emitEvent("status", "low", "Connected to local service", {
-        state: "connected",
+    return new Promise((resolve, reject) => {
+      this.emitEvent("status", "low", "Connecting to service...", {
+        state: "connecting",
       });
-      this.startHeartbeat();
 
-      // Setup line reader
-      const rl = createInterface({ input: socket });
-      rl.on("line", (line) => this.handleLine(line));
-    });
-
-    socket.on("error", (err) => {
-      // If we are already connected, this is a drop.
-      // If we are connecting, this is a failure.
-      const msg = err.message;
-      if (!this.connected) {
-        // Silent retry loop for "not found"
-      } else {
-        this.emitEvent("status", "medium", "Connection lost: " + msg, {
-          state: "disconnected",
+      const socket = createConnection(PIPE_NAME, () => {
+        this.socket = socket;
+        this.connected = true;
+        this.emitEvent("status", "low", "Connected to local service", {
+          state: "connected",
         });
-      }
-      this.cleanup();
-      this.scheduleReconnect();
-    });
+        this.startHeartbeat();
+        socket.write(STATUS_COMMAND_PAYLOAD);
 
-    socket.on("close", () => {
-      if (this.connected) {
-        this.emitEvent("status", "medium", "Service disconnected", {
-          state: "disconnected",
-        });
-      }
-      this.cleanup();
-      this.scheduleReconnect();
-    });
+        // Setup line reader
+        const rl = createInterface({ input: socket });
+        rl.on("line", (line) => this.handleLine(line));
+        resolve();
+      });
 
-    // We store temporary socket reference to allow cleanup on immediate error
-    // But we don't assign to this.socket until 'connect' fires to avoid using half-open socket
-    // actually, socket.on('error') might fire before connect.
+      const connectTimeout = setTimeout(() => {
+        socket.destroy();
+        reject(new Error("Connection timed out"));
+      }, CONNECT_TIMEOUT_MS);
+
+      socket.once("connect", () => {
+        clearTimeout(connectTimeout);
+      });
+
+      socket.on("error", (err) => {
+        clearTimeout(connectTimeout);
+        // If we are already connected, this is a drop.
+        // If we are connecting, this is a failure.
+        const msg = err.message;
+        if (!this.connected) {
+          reject(new Error(msg));
+        } else {
+          this.emitEvent("status", "medium", "Connection lost: " + msg, {
+            state: "disconnected",
+          });
+        }
+        this.cleanup();
+        this.scheduleReconnect();
+      });
+
+      socket.on("close", () => {
+        clearTimeout(connectTimeout);
+        if (this.connected) {
+          this.emitEvent("status", "medium", "Service disconnected", {
+            state: "disconnected",
+          });
+        }
+        this.cleanup();
+        this.scheduleReconnect();
+      });
+
+      // We store temporary socket reference to allow cleanup on immediate error
+      // But we don't assign to this.socket until 'connect' fires to avoid using half-open socket
+      // actually, socket.on('error') might fire before connect.
+    });
   }
 
   private scheduleReconnect() {
@@ -178,7 +206,7 @@ export class ClientEngine extends EventEmitter implements AntivirusEngine {
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      this.attemptConnection();
+      this.attemptConnection().catch(() => {});
     }, RECONNECT_DELAY_MS);
   }
 
@@ -229,6 +257,9 @@ export class ClientEngine extends EventEmitter implements AntivirusEngine {
     const normalized = normalizeSettings(settings);
     this.settings = { ...normalized };
     ensureConfig(this.workingDir, this.settings);
+    if (this.connected && this.socket) {
+      this.socket.write(STATUS_COMMAND_PAYLOAD);
+    }
     this.emitEvent("info", "low", "Client engine settings updated", {
       settings: this.settings,
     });

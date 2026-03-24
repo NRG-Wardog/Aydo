@@ -15,6 +15,8 @@ void ServerCommunications::initialize(const std::string &serverAddress, const st
   if (!m_instance) {
     m_instance.reset(new ServerCommunications(serverAddress, authenticationToken, refreshToken));
     m_instance->startReachabilityMonitor();
+  } else {
+    m_instance->updateConnectionSettings(serverAddress, authenticationToken, refreshToken);
   }
 }
 
@@ -39,6 +41,15 @@ ServerCommunications::ServerCommunications(const std::string &serverAddress,
 
 ServerCommunications::~ServerCommunications() {
   stopReachabilityMonitor();
+}
+
+void ServerCommunications::updateConnectionSettings(const std::string &serverAddress,
+                                                    const std::string &authenticationToken,
+                                                    const std::string &refreshToken) {
+  m_serverAddress = serverAddress;
+  m_authenticationToken = authenticationToken;
+  m_refreshToken = refreshToken;
+  m_serverReachable.store(pingServer(), std::memory_order_relaxed);
 }
 
 void ServerCommunications::startReachabilityMonitor() {

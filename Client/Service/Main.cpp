@@ -1,10 +1,13 @@
 #include "AhoCorasick/ACScanningEngine.hpp"
 #include "AhoCorasick/AhoCorasick.hpp"
 #include "AhoCorasick/SCAScanningEngine.hpp"
+#include "FileLogger.hpp"
 #include "ServerCommunications/ServerCommunications.hpp"
 #include "UserConfig.hpp"
+
 #define NOMINMAX
 #include <windows.h>
+#include <sddl.h>
 
 #include <atomic>
 #include <cstdlib>
@@ -24,9 +27,42 @@
 #include "Yara/YScanningEngine.hpp"
 
 #pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "Advapi32.lib")
 
 static std::atomic<bool> g_stopMonitoring{false};
 static ProcessMonitor *g_monitor = nullptr;
+
+namespace ServicePipeSecurity {
+constexpr const char *PIPE_SECURITY_SDDL =
+    "D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;AU)";
+
+struct PipeSecurityContext {
+  SECURITY_ATTRIBUTES attributes{};
+  PSECURITY_DESCRIPTOR securityDescriptor = nullptr;
+
+  [[nodiscard]] bool initialize() {
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorA(
+            PIPE_SECURITY_SDDL,
+            SDDL_REVISION_1,
+            &securityDescriptor,
+            nullptr)) {
+      return false;
+    }
+
+    attributes.nLength = sizeof(attributes);
+    attributes.lpSecurityDescriptor = securityDescriptor;
+    attributes.bInheritHandle = FALSE;
+    return true;
+  }
+
+  ~PipeSecurityContext() {
+    if (securityDescriptor != nullptr) {
+      LocalFree(securityDescriptor);
+      securityDescriptor = nullptr;
+    }
+  }
+};
+} // namespace ServicePipeSecurity
 
 static bool reportSelfTest(bool condition, std::string_view name) {
   if (condition) {
@@ -107,6 +143,14 @@ static int runSelfTests() {
 
 static void pipeServerLoop(ProcessMonitor *monitor) {
   std::string pipeName{Constants::AYDO_GUI_PIPE_NAME};
+  ServicePipeSecurity::PipeSecurityContext pipeSecurityContext;
+  const bool hasCustomPipeSecurity = pipeSecurityContext.initialize();
+
+  if (!hasCustomPipeSecurity) {
+    std::cerr << "Failed to initialize named pipe security descriptor, GLE="
+              << GetLastError() << std::endl;
+  }
+
   std::cout << "Starting Named Pipe Server at " << pipeName << std::endl;
 
   while (!g_stopMonitoring.load(std::memory_order_relaxed)) {
@@ -118,7 +162,7 @@ static void pipeServerLoop(ProcessMonitor *monitor) {
         Constants::PIPE_BUFFER_SIZE,
         Constants::PIPE_BUFFER_SIZE,
         0,
-        NULL);
+        hasCustomPipeSecurity ? &pipeSecurityContext.attributes : NULL);
 
     if (hPipe == INVALID_HANDLE_VALUE) {
       std::cerr << "CreateNamedPipe failed, GLE=" << GetLastError()
@@ -178,6 +222,10 @@ static void pipeServerLoop(ProcessMonitor *monitor) {
               sendEvent(Protocol::Event(
                   Protocol::EventType::Heartbeat, "low", "PONG"));
             } else if (type == "status") {
+              auto &config = UserConfig::getInstance();
+              config.load();
+              ServerCommunications::initialize(
+                  config.serverUrl, config.accessToken, config.refreshToken);
               monitor->printStatus();
               sendEvent(Protocol::Event(
                   Protocol::EventType::CapabilitiesUpdate,
@@ -234,147 +282,126 @@ static BOOL WINAPI CtrlHandler(DWORD t) {
   return FALSE;
 }
 
-static void handleUserAuth() {
-  auto &config = UserConfig::getInstance();
-  auto &server = ServerCommunications::getInstance();
-
-  if (!config.accessToken.empty()) {
-    return;
-  }
-
-  std::cout << "Authentication required." << std::endl;
-  std::cout << "1. Login" << std::endl;
-  std::cout << "2. Register" << std::endl;
-  std::cout << "Choice: ";
-
-  std::string choice;
-  std::getline(std::cin, choice);
-
-  std::string email, password, nickname;
-
-  if (choice == "1") {
-    std::cout << "Email: ";
-    std::getline(std::cin, email);
-    std::cout << "Password: ";
-    std::getline(std::cin, password);
-
-    if (server.login(email, password)) {
-      std::cout << "Login successful!" << std::endl;
-    } else {
-      std::cerr
-          << "Login failed. Please restart the service to try again."
-          << std::endl;
-      exit(EXIT_FAILURE);
-    }
-  } else if (choice == "2") {
-    std::cout << "Email: ";
-    std::getline(std::cin, email);
-    std::cout << "Nickname: ";
-    std::getline(std::cin, nickname);
-    std::cout << "Password: ";
-    std::getline(std::cin, password);
-
-    if (server.registerUser(email, nickname, password)) {
-      std::cout << "Registration successful!" << std::endl;
-    } else {
-      std::cerr
-          << "Registration failed. Please restart the service to try again."
-          << std::endl;
-      exit(EXIT_FAILURE);
-    }
-  } else {
-    std::cerr << "Invalid choice." << std::endl;
-    exit(EXIT_FAILURE);
-  }
-}
-
 int main(int argc, char *argv[]) {
-  if (argc == 2 && std::string_view(argv[1]) == "--self-test") {
-    return runSelfTests();
-  }
-
-  std::cout << "==================================" << std::endl;
-  std::cout << "     Aydo Process Monitor" << std::endl;
-  std::cout << "==================================" << std::endl
-            << std::endl;
-
-  auto &config = UserConfig::getInstance();
-  if (!config.load()) {
-    std::cout << "Creating default config.json..." << std::endl;
-    config.save();
-  }
-
-  std::cout << "Connecting to server..." << config.serverUrl << std::endl;
-  ServerCommunications::initialize(
-      config.serverUrl, config.accessToken, config.refreshToken);
-
-  if (config.refreshToken.empty()) {
-    handleUserAuth();
-  }
-
-  if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {
-    std::cerr << "Warning: Could not set Ctrl+C handler" << std::endl;
-  }
-
-  auto driver = KernelCommunications::getInstance();
-  std::wstring devicePath{
-      Constants::AYDO_DRIVER_DEVICE_PATH.begin(),
-      Constants::AYDO_DRIVER_DEVICE_PATH.end()};
-  if (!driver->connect(devicePath)) {
-    std::cerr << "Failed to open driver device. Error: " << GetLastError()
-              << std::endl;
-    std::cerr << "Make sure the driver is loaded!" << std::endl;
-    return EXIT_FAILURE;
-  }
-
-  std::cout << "Successfully connected to driver!" << std::endl;
-  std::cout << std::endl;
-
-  if (!driver->registerSelfAsService()) {
-    std::cerr << "Failed to register as service. Error: " << GetLastError()
-              << std::endl;
-    return EXIT_FAILURE;
-  }
-
-  std::cout << "Successfully registered as service!" << std::endl;
-  std::cout << "Initializing scanning engines..." << std::endl;
+  FileLogger::init();
+  FileLogger::log("========== Aydo Process Monitor Starting ==========");
 
   try {
+    if (argc == 2 && std::string_view(argv[1]) == "--self-test") {
+      FileLogger::log("Running self-tests");
+      return runSelfTests();
+    }
+
+    std::cout << "==================================" << std::endl;
+    std::cout << "     Aydo Process Monitor" << std::endl;
+    std::cout << "==================================" << std::endl
+              << std::endl;
+
+    FileLogger::log("Loading user configuration");
+    auto &config = UserConfig::getInstance();
+    if (!config.load()) {
+      std::cout << "Creating default config.json..." << std::endl;
+      FileLogger::log("Creating default config.json");
+      config.save();
+    } else {
+      FileLogger::log("Configuration loaded successfully");
+    }
+
+    std::cout << "Connecting to server..." << config.serverUrl << std::endl;
+    FileLogger::log("Initializing server communications: " + config.serverUrl);
+    ServerCommunications::initialize(
+        config.serverUrl, config.accessToken, config.refreshToken);
+
+    if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {
+      std::cerr << "Warning: Could not set Ctrl+C handler" << std::endl;
+      FileLogger::log("Warning: Could not set Ctrl+C handler");
+    }
+
+    FileLogger::log("Connecting to kernel driver");
+    auto driver = KernelCommunications::getInstance();
+    std::wstring devicePath{
+        Constants::AYDO_DRIVER_DEVICE_PATH.begin(),
+        Constants::AYDO_DRIVER_DEVICE_PATH.end()};
+    if (!driver->connect(devicePath)) {
+      DWORD error = GetLastError();
+      std::cerr << "Failed to open driver device. Error: " << error
+                << std::endl;
+      std::cerr << "Make sure the driver is loaded!" << std::endl;
+      FileLogger::error("Failed to connect to driver. Error code: " + std::to_string(error));
+      FileLogger::error("Make sure the driver is loaded and service has admin privileges");
+      FileLogger::close();
+      return EXIT_FAILURE;
+    }
+
+    std::cout << "Successfully connected to driver!" << std::endl;
+    std::cout << std::endl;
+    FileLogger::log("Successfully connected to driver");
+
+    if (!driver->registerSelfAsService()) {
+      DWORD error = GetLastError();
+      std::cerr << "Failed to register as service. Error: " << error
+                << std::endl;
+      FileLogger::error("Failed to register as service. Error code: " + std::to_string(error));
+      FileLogger::close();
+      return EXIT_FAILURE;
+    }
+
+    std::cout << "Successfully registered as service!" << std::endl;
+    std::cout << "Initializing scanning engines..." << std::endl;
+    FileLogger::log("Successfully registered as service");
+    FileLogger::log("Initializing scanning engines");
+
     YScanningEngine yara(Constants::YARA_RULES_FILES, config.killThreshold);
     std::cout << "  -> Initialized YARA scanning engine (Kill Threshold: "
               << config.killThreshold << ")" << std::endl;
+    FileLogger::log("Initialized YARA scanning engine (Kill Threshold: " + std::to_string(config.killThreshold) + ")");
 
     std::string hashesDbPath{
         Constants::HASHES_DB_PATH.begin(), Constants::HASHES_DB_PATH.end()};
     HashesDatabase hashDb(hashesDbPath);
     std::cout << "  -> Loaded hashes database" << std::endl;
+    FileLogger::log("Loaded hashes database from: " + hashesDbPath);
 
     std::cout << "All scanning engines initialized successfully!" << std::endl
               << std::endl;
+    FileLogger::log("All scanning engines initialized successfully");
 
     ProcessMonitor monitor(driver, yara, hashDb);
     g_monitor = &monitor;
 
     std::cout << "Starting background monitoring thread..." << std::endl;
+    FileLogger::log("Starting background monitoring thread");
     monitor.start();
 
     std::thread commandThread(pipeServerLoop, &monitor);
     commandThread.detach();
+    FileLogger::log("Named pipe server started");
 
     std::cout << "Monitoring active. Press Ctrl+C to stop." << std::endl
               << std::endl;
+    FileLogger::log("Service fully initialized and running");
 
     while (!g_stopMonitoring.load(std::memory_order_relaxed)) {
       Sleep(Constants::IDLE_SLEEP_TIME_MS);
     }
 
+    FileLogger::log("Stopping monitor");
     monitor.stop();
     g_monitor = nullptr;
 
     std::cout << "Shutting down..." << std::endl;
+    FileLogger::log("Service shutting down normally");
+    FileLogger::close();
   } catch (const std::exception &ex) {
     std::cerr << "\nFATAL ERROR: Failed to initialize scanning engines: "
               << ex.what() << std::endl;
+    FileLogger::error("FATAL ERROR: " + std::string(ex.what()));
+    FileLogger::close();
+    return EXIT_FAILURE;
+  } catch (...) {
+    std::cerr << "\nFATAL ERROR: Unknown exception during initialization" << std::endl;
+    FileLogger::error("FATAL ERROR: Unknown exception during initialization");
+    FileLogger::close();
     return EXIT_FAILURE;
   }
 

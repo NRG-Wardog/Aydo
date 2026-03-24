@@ -9,8 +9,18 @@ interface Window {
     setSettings: (settings: any) => Promise<void>;
     onEvent: (handler: (payload: any) => void) => () => void;
     pickScanTarget: () => Promise<string | null>;
-    authLogin: (payload: { email: string; password: string; serverUrl: string }) => Promise<any>;
-    authRegister: (payload: { email: string; password: string; nickname: string; serverUrl: string }) => Promise<any>;
+    authLogin: (payload: {
+      email: string;
+      password: string;
+      serverUrl: string;
+    }) => Promise<any>;
+    authRegister: (payload: {
+      email: string;
+      password: string;
+      nickname: string;
+      serverUrl: string;
+    }) => Promise<any>;
+    authSession: () => Promise<any>;
     closeWindow: () => void;
     minimizeWindow: () => void;
     maximizeWindow: () => void;

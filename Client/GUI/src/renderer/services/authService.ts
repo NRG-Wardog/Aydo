@@ -14,8 +14,6 @@ type AuthState = {
   error: string | null;
 };
 
-const STORAGE_KEY = "aydo.user";
-const SERVER_URL_KEY = "aydo.serverUrl";
 const SERVER_DEFAULT_URL = "http://192.168.56.1";
 const MIN_PASSWORD_LENGTH = 6;
 const GUEST_SIM_DELAY_MS = 600;
@@ -23,13 +21,13 @@ const GUEST_SIM_DELAY_MS = 600;
 class AuthService {
   private state: AuthState = {
     user: null,
-    loading: false,
+    loading: true,
     error: null,
   };
   private listeners = new Set<() => void>();
 
   constructor() {
-    this.hydrate();
+    void this.restoreSessionFromService();
   }
 
   subscribe(listener: () => void): () => void {
@@ -42,12 +40,10 @@ class AuthService {
   }
 
   getStoredServerUrl(): string {
-    try {
-      const stored = localStorage.getItem(SERVER_URL_KEY);
-      return stored ?? SERVER_DEFAULT_URL;
-    } catch {
-      return SERVER_DEFAULT_URL;
-    }
+    const configured = antivirusService.getState().settings.serverUrl?.trim();
+    return configured && configured.length > 0
+      ? configured
+      : SERVER_DEFAULT_URL;
   }
 
   async login(
@@ -85,15 +81,20 @@ class AuthService {
       return { ok: false, message: authResult.message };
     }
 
-    const stored = this.readStored();
-    const avatarUrl = stored?.email === email ? stored.avatarUrl : null;
-    const name =
-      authResult.nickname ??
-      email
-        .split("@")[0]
-        .replace(/\./g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-    const roleSuffix = authResult.offline ? " (Offline)" : "";
+    const hasAccessToken =
+      typeof authResult.accessToken === "string" &&
+      authResult.accessToken.trim().length > 0;
+    const hasRefreshToken =
+      typeof authResult.refreshToken === "string" &&
+      authResult.refreshToken.trim().length > 0;
+    if (authResult.offline || !hasAccessToken || !hasRefreshToken) {
+      const message =
+        "Authentication requires an online server session. Connect to the server or continue as guest.";
+      this.update({ loading: false, error: message });
+      return { ok: false, message };
+    }
+
+    const name = authResult.nickname ?? this.toDisplayName(email);
 
     this.update({
       loading: false,
@@ -101,21 +102,18 @@ class AuthService {
       user: {
         name,
         email,
-        role: `Sigma Rizzler${roleSuffix}`,
-        avatarUrl,
+        role: "Sigma Rizzler",
+        avatarUrl: null,
       },
     });
-
-    this.persist();
-    this.persistServerUrl(serverUrl);
 
     await antivirusService.init();
     const currentSettings = antivirusService.getState().settings;
     await antivirusService.updateSettings({
       ...currentSettings,
       serverUrl,
-      accessToken: authResult.accessToken ?? currentSettings.accessToken,
-      refreshToken: authResult.refreshToken ?? currentSettings.refreshToken,
+      accessToken: authResult.accessToken,
+      refreshToken: authResult.refreshToken,
     });
     await antivirusService.connect();
 
@@ -163,28 +161,37 @@ class AuthService {
       return { ok: false, message: authResult.message };
     }
 
-    const roleSuffix = authResult.offline ? " (Offline)" : "";
+    const hasAccessToken =
+      typeof authResult.accessToken === "string" &&
+      authResult.accessToken.trim().length > 0;
+    const hasRefreshToken =
+      typeof authResult.refreshToken === "string" &&
+      authResult.refreshToken.trim().length > 0;
+    if (authResult.offline || !hasAccessToken || !hasRefreshToken) {
+      const message =
+        "Registration requires an online server session. Connect to the server or continue as guest.";
+      this.update({ loading: false, error: message });
+      return { ok: false, message };
+    }
+
     this.update({
       loading: false,
       error: null,
       user: {
         name: authResult.nickname ?? name,
         email,
-        role: `Sigma Rizzler ${roleSuffix}`,
+        role: "Sigma Rizzler",
         avatarUrl: null,
       },
     });
-
-    this.persist();
-    this.persistServerUrl(serverUrl);
 
     await antivirusService.init();
     const currentSettings = antivirusService.getState().settings;
     await antivirusService.updateSettings({
       ...currentSettings,
       serverUrl,
-      accessToken: authResult.accessToken ?? currentSettings.accessToken,
-      refreshToken: authResult.refreshToken ?? currentSettings.refreshToken,
+      accessToken: authResult.accessToken,
+      refreshToken: authResult.refreshToken,
     });
     await antivirusService.connect();
 
@@ -202,8 +209,6 @@ class AuthService {
         avatarUrl,
       },
     });
-
-    this.persist();
   }
 
   async continueAsGuest(): Promise<{ ok: boolean }> {
@@ -223,9 +228,13 @@ class AuthService {
       },
     });
 
-    this.persist();
-
     await antivirusService.init();
+    const currentSettings = antivirusService.getState().settings;
+    await antivirusService.updateSettings({
+      ...currentSettings,
+      accessToken: "",
+      refreshToken: "",
+    });
     await antivirusService.connect();
 
     return { ok: true };
@@ -233,7 +242,6 @@ class AuthService {
 
   logout(): void {
     this.update({ user: null, loading: false, error: null });
-    this.persist();
     antivirusService.disconnect();
     antivirusService.updateSettings({
       ...antivirusService.getState().settings,
@@ -247,43 +255,36 @@ class AuthService {
     this.listeners.forEach((listener) => listener());
   }
 
-  private hydrate(): void {
-    const stored = this.readStored();
-    if (stored) {
-      this.state = { ...this.state, user: stored };
+  private async restoreSessionFromService(): Promise<void> {
+    const bridge = typeof window !== "undefined" ? window.avBridge : undefined;
+    if (!bridge?.authSession) {
+      this.update({ loading: false });
+      return;
     }
+
+    const session = await bridge.authSession();
+    if (!session.ok || !session.email) {
+      this.update({ loading: false });
+      return;
+    }
+
+    this.update({
+      loading: false,
+      user: {
+        name: session.nickname ?? this.toDisplayName(session.email),
+        email: session.email,
+        role: "Sigma Rizzler",
+        avatarUrl: null,
+      },
+      error: null,
+    });
   }
 
-  private persist(): void {
-    try {
-      if (this.state.user) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state.user));
-      } else {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    } catch {
-      // ignore storage errors
-    }
-  }
-
-  private persistServerUrl(url: string): void {
-    try {
-      localStorage.setItem(SERVER_URL_KEY, url);
-    } catch {
-      // ignore storage errors
-    }
-  }
-
-  private readStored(): UserProfile | null {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        return null;
-      }
-      return JSON.parse(raw) as UserProfile;
-    } catch {
-      return null;
-    }
+  private toDisplayName(email: string): string {
+    return email
+      .split("@")[0]
+      .replace(/\./g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
   }
 }
 

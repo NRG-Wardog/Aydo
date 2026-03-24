@@ -22,6 +22,59 @@ const sendToRenderer = (channel: string, payload: AvEventEnvelope) => {
   }
 };
 
+const resolveAuthSession = async (): Promise<AuthSessionResponse> => {
+  const snapshot = bridge.getSnapshot();
+  const serverUrl = normalizeServerUrl(snapshot.settings.serverUrl ?? "");
+  const accessToken = snapshot.settings.accessToken?.trim() ?? "";
+
+  if (!serverUrl || !accessToken) {
+    return { ok: false, message: "No authenticated service session" };
+  }
+
+  try {
+    const meResponse = await fetch(`${serverUrl}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!meResponse.ok) {
+      return {
+        ok: false,
+        message: `Session validation failed (${meResponse.status})`,
+      };
+    }
+
+    const meData = await meResponse.json().catch(() => null);
+    const mePayload =
+      meData &&
+      typeof meData === "object" &&
+      meData.data &&
+      typeof meData.data === "object"
+        ? (meData.data as Record<string, unknown>)
+        : (meData as Record<string, unknown> | null);
+    const email =
+      mePayload && typeof mePayload.email === "string" ? mePayload.email : "";
+    const nickname =
+      mePayload && typeof mePayload.nickname === "string"
+        ? mePayload.nickname
+        : undefined;
+
+    if (!email) {
+      return { ok: false, message: "Session user payload is invalid" };
+    }
+
+    return {
+      ok: true,
+      message: "Session restored",
+      email,
+      nickname,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to resolve session";
+    return { ok: false, message, offline: true };
+  }
+};
+
 const bridge = new AntivirusBridge(sendToRenderer, createAntivirusEngine());
 bridge.init();
 
@@ -30,6 +83,14 @@ type AuthResponse = {
   message: string;
   accessToken?: string;
   refreshToken?: string;
+  nickname?: string;
+  offline?: boolean;
+};
+
+type AuthSessionResponse = {
+  ok: boolean;
+  message: string;
+  email?: string;
   nickname?: string;
   offline?: boolean;
 };
@@ -52,14 +113,11 @@ const performAuth = async (
   },
 ): Promise<AuthResponse> => {
   if (process.env.AYDO_AUTH_OFFLINE === "1") {
-    const nickname =
-      payload.nickname ?? payload.email.split("@")[0] ?? "Analyst";
     return {
-      ok: true,
-      message: "Offline auth",
-      accessToken: "offline-access",
-      refreshToken: "offline-refresh",
-      nickname,
+      ok: false,
+      message:
+        "Authentication is disabled in offline mode. Connect to the server or continue as guest.",
+      offline: true,
     };
   }
 
@@ -104,8 +162,15 @@ const performAuth = async (
         });
         if (meResponse.ok) {
           const meData = await meResponse.json().catch(() => null);
-          if (meData?.nickname) {
-            nickname = meData.nickname;
+          const mePayload =
+            meData &&
+            typeof meData === "object" &&
+            meData.data &&
+            typeof meData.data === "object"
+              ? (meData.data as Record<string, unknown>)
+              : (meData as Record<string, unknown> | null);
+          if (mePayload && typeof mePayload.nickname === "string") {
+            nickname = mePayload.nickname;
           }
         }
       } catch {
@@ -154,7 +219,10 @@ const findDevServer = async (): Promise<string | undefined> => {
   for (const port of DEV_SERVER_PORTS) {
     try {
       const url = `http://localhost:${port}`;
-      const response = await fetch(url, { method: "HEAD", timeout: DEV_SERVER_PING_TIMEOUT_MS });
+      const response = await fetch(url, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(DEV_SERVER_PING_TIMEOUT_MS),
+      });
       // if the dev server is fine (304 or 2xx)
       if (response.ok || response.status === 304) {
         return url;
@@ -318,6 +386,7 @@ ipcMain.handle(
     },
   ) => performAuth("register", payload),
 );
+ipcMain.handle("auth:session", async () => resolveAuthSession());
 
 app.whenReady().then(async () => {
   await createWindow();

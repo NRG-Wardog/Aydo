@@ -16,6 +16,7 @@
 
     <Feature Id="CompleteFeature" Title="Aydo Security" Level="1">
       <ComponentGroupRef Id="MainComponents" />
+      <ComponentGroupRef Id="RuntimeDllFiles" />
       <ComponentGroupRef Id="GuiFiles" />
       <ComponentGroupRef Id="DataFiles" />
     </Feature>
@@ -132,6 +133,12 @@
           KeyPath="yes"
         />
       </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="RuntimeDllFiles" Directory="INSTALLFOLDER">
+      <Files Include="..\x64\Release\*.dll" />
     </ComponentGroup>
   </Fragment>
 

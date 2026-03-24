@@ -178,6 +178,7 @@
     <ClCompile Include="AhoCorasick\AhoCorasick.cpp" />
     <ClCompile Include="AhoCorasick\ACUtils.cpp" />
     <ClCompile Include="AhoCorasick\SCAScanningEngine.cpp" />
+    <ClCompile Include="FileLogger.cpp" />
     <ClCompile Include="KernelCommunications\KernelCommunications.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Databases\HashesDatabase.cpp" />
@@ -198,6 +199,7 @@
     <ClInclude Include="AhoCorasick\SCAScanningEngine.hpp" />
     <ClInclude Include="Constants.hpp" />
     <ClInclude Include="Errors.hpp" />
+    <ClInclude Include="FileLogger.hpp" />
     <ClInclude Include="Databases\HashesDatabase.hpp" />
     <ClInclude Include="IOCTLs.hpp" />
     <ClInclude Include="IScanningEngine.hpp" />

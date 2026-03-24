@@ -38,4 +38,5 @@ constexpr int INFECTED_FILE_ACTION_QUARANTINE = 1;
 constexpr int INFECTED_FILE_ACTION_DELETE = 2;
 constexpr int SCAN_PROGRESS_PERCENTAGE_MAX = 100;
 constexpr std::chrono::milliseconds REQUEST_TIMEOUT_DURATION{std::chrono::seconds{2}};
+constexpr int SLOW_SCAN_RESUME_TIMEOUT_S = 15;
 }; // namespace Constants
