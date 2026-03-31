@@ -58,24 +58,16 @@
   <ImportGroup Label="Shared">
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"
-      Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')"
-      Label="LocalAppDataPlatform" />
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"
-      Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')"
-      Label="LocalAppDataPlatform" />
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"
-      Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')"
-      Label="LocalAppDataPlatform" />
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"
-      Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')"
-      Label="LocalAppDataPlatform" />
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Label="Vcpkg">
@@ -147,6 +139,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Controllers\Auth.cpp" />
+    <ClCompile Include="Controllers\Health.cpp" />
     <ClCompile Include="Controllers\Sandbox.cpp" />
     <ClCompile Include="DatabaseSetup.cpp" />
     <ClCompile Include="JWT.cpp" />
@@ -158,11 +151,13 @@
     <ClCompile Include="Utils\Generic.cpp" />
     <ClCompile Include="Utils\ScanProcessingCron.cpp" />
     <ClCompile Include="Utils\Password.cpp" />
+    <ClCompile Include="Utils\SandboxRuntimeConfig.cpp" />
     <ClCompile Include="Utils\Validation.cpp" />
     <ClCompile Include="Utils\VmRunner.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Controllers\Auth.hpp" />
+    <ClInclude Include="Controllers\Health.hpp" />
     <ClInclude Include="Controllers\Sandbox.hpp" />
     <ClInclude Include="Constants.hpp" />
     <ClInclude Include="DatabaseSetup.hpp" />
@@ -175,6 +170,7 @@
     <ClInclude Include="Utils\ScanProcessingCron.hpp" />
     <ClInclude Include="Utils\Password.hpp" />
     <ClInclude Include="Utils\Responses.hpp" />
+    <ClInclude Include="Utils\SandboxRuntimeConfig.hpp" />
     <ClInclude Include="Utils\Validation.hpp" />
     <ClInclude Include="Utils\VmRunner.hpp" />
   </ItemGroup>

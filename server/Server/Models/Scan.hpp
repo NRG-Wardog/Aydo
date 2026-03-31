@@ -58,6 +58,9 @@ public:
                            const std::string &fileHash, ScanStatus status,
                            VirusType virusType, int score);
 
+  static void resetScan(const drogon::orm::DbClientPtr &dbClient,
+                        const std::string &fileHash, int runtime);
+
   [[nodiscard]] static std::string statusToString(ScanStatus status);
   [[nodiscard]] static ScanStatus stringToStatus(const std::string &str);
   [[nodiscard]] static std::string virusTypeToString(VirusType type);

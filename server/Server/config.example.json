@@ -1,0 +1,56 @@
+{
+  "listeners": [
+    {
+      "address": "0.0.0.0",
+      "port": 80,
+      "https": false
+    }
+  ],
+  "threads_num": 16,
+  "log": {
+    "log_path": "./",
+    "logfile_base_name": "",
+    "log_size_limit": 100000000,
+    "log_level": "INFO"
+  },
+  "db_clients": [
+    {
+      "name": "default",
+      "rdbms": "postgresql",
+      "host": "localhost",
+      "port": 15432,
+      "dbname": "your_database",
+      "user": "your_user",
+      "password": "your_password",
+      "passwd": "your_password"
+    }
+  ],
+  "custom_config": {
+    "jwtSecret": "replace-with-a-long-random-secret",
+    "maxUploadBytes": 52428800,
+    "processingCronIntervalSeconds": 5.0,
+    "sandbox": {
+      "vmRunnerPath": "C:\\path\\to\\aydo\\x64\\Release\\VMRunner.exe",
+      "vmRunPath": "C:\\Program Files (x86)\\VMware\\VMware Workstation\\vmrun.exe",
+      "analysisVmPath": "D:\\VMs\\Sandbox1\\Sandbox1.vmx",
+      "sandboxesDirectoryPath": "D:\\VMs\\Sandboxes",
+      "vmStartMode": "nogui",
+      "guestUser": "SandboxUser",
+      "guestPass": "replace-me",
+      "guestSharedDir": "\\\\vmware-host\\Shared Folders\\Shared",
+      "shareFileName": "log.sqlite",
+      "pmHostPath": "C:\\path\\to\\aydo\\server\\VM\\ProcessMonitor\\bin\\x64\\Release\\ProcessMonitor.exe",
+      "pmGuestPath": "C:\\Users\\SandboxUser\\Desktop\\ProcessMonitor.exe",
+      "dllInjectorHostPath": "C:\\path\\to\\aydo\\x64\\Release\\ProcessRunnerDLL.dll",
+      "dllInjectorGuestPath": "C:\\Users\\SandboxUser\\Desktop\\InjectedDLL.dll",
+      "processRunnerHostPath": "C:\\path\\to\\aydo\\x64\\Release\\ProcessRunner.exe",
+      "processRunnerGuestPath": "C:\\Users\\SandboxUser\\Desktop\\ProcessRunner.exe",
+      "suspiciousWorkdirGuest": "C:\\Users\\SandboxUser\\Desktop\\checks",
+      "vmPowerOnMaxRetries": 60,
+      "vmPowerOnSleepMs": 2000,
+      "vmToolsMaxRetries": 60,
+      "vmToolsSleepMs": 5000,
+      "vmShutdownGraceMs": 5000
+    }
+  }
+}

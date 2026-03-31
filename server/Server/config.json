@@ -17,15 +17,39 @@
     {
       "name": "default",
       "rdbms": "postgresql",
-      "host": "crossover.proxy.rlwy.net",
-      "port": 38423,
-      "dbname": "railway",
-      "user": "postgres",
-      "password": "lgaOqnFVPMMNuhcTvyZWHJsgwfarruQJ"
+      "host": "localhost",
+      "port": 15432,
+      "dbname": "mydatabase",
+      "user": "myuser",
+      "password": "mypassword",
+      "passwd": "mypassword"
     }
   ],
   "custom_config": {
     "jwtSecret": "secret-shhhh-dont-tell",
-    "maxUploadBytes": 52428800
+    "maxUploadBytes": 52428800,
+    "sandbox": {
+      "vmRunnerPath": "C:\\Desktop\\aydo\\x64\\Release\\VMRunner.exe",
+      "vmRunPath": "C:\\Program Files (x86)\\VMware\\VMware Workstation\\vmrun.exe",
+      "analysisVmPath": "D:\\aydoVm\\Sandbox1.vmx",
+      "sandboxesDirectoryPath": "D:\\aydoVm",
+      "vmStartMode": "nogui",
+      "guestUser": "Cyber_user",
+      "guestPass": "1234",
+      "guestSharedDir": "\\\\vmware-host\\Shared Folders\\Shared",
+      "shareFileName": "log.sqlite",
+      "pmHostPath": "C:\\Desktop\\aydo\\server\\VM\\ProcessMonitor\\bin\\x64\\Release\\ProcessMonitor.exe",
+      "pmGuestPath": "C:\\Users\\Cyber_user\\Desktop\\ProcessMonitor.exe",
+      "dllInjectorHostPath": "C:\\Desktop\\aydo\\x64\\Debug\\ProcessRunnerDLL.dll",
+      "dllInjectorGuestPath": "C:\\Users\\Cyber_user\\Desktop\\InjectedDLL.dll",
+      "processRunnerHostPath": "C:\\Desktop\\aydo\\x64\\Debug\\ProcessRunner.exe",
+      "processRunnerGuestPath": "C:\\Users\\Cyber_user\\Desktop\\ProcessRunner.exe",
+      "suspiciousWorkdirGuest": "C:\\Users\\Cyber_user\\Desktop\\checks",
+      "vmPowerOnMaxRetries": 60,
+      "vmPowerOnSleepMs": 2000,
+      "vmToolsMaxRetries": 60,
+      "vmToolsSleepMs": 5000,
+      "vmShutdownGraceMs": 5000
+    }
   }
 }

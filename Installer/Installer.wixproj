@@ -1,0 +1,12 @@
+﻿<Project Sdk="WixToolset.Sdk/6.0.2">
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <EnableDefaultItems>false</EnableDefaultItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Bundle.wxs" />
+    <PackageReference Include="WixToolset.BootstrapperApplications.wixext" Version="6.0.2" />
+  </ItemGroup>
+</Project>

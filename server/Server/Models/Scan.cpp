@@ -128,6 +128,22 @@ void Scan::updateResult(const DbClientPtr &dbClient, const std::string &fileHash
   }
 }
 
+void Scan::resetScan(const DbClientPtr &dbClient, const std::string &fileHash,
+                     int runtime) {
+  try {
+    dbClient->execSqlSync(
+        "UPDATE scans SET status = $1, virusType = $2, score = $3, runtime = $4, updatedAt = CURRENT_TIMESTAMP WHERE fileHash = $5",
+        statusToString(ScanStatus::Pending), virusTypeToString(VirusType::Clean),
+        0, runtime, fileHash);
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "Database error in Scan::resetScan: " << e.base().what();
+  } catch (const std::exception &e) {
+    LOG_ERROR << "Unexpected error in Scan::resetScan: " << e.what();
+  } catch (...) {
+    LOG_ERROR << "Unexpected unknown error in Scan::resetScan";
+  }
+}
+
 std::string Scan::statusToString(ScanStatus status) {
   switch (status) {
   case ScanStatus::Pending:

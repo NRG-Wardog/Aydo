@@ -72,33 +72,37 @@ void AhoCorasick::_buildFailureLinks() {
 
 // We don't use vectors here because it's slower than raw arrays
 std::vector<AhoCorasick::Match> AhoCorasick::search(const uint8_t *data, size_t length) const {
-  // Vector to store matches: pair of (pattern_index, end_position_in_text)
   std::vector<AhoCorasick::Match> matches;
-  // Start searching from the root of the trie
   std::shared_ptr<ACNode> node = m_root;
 
-  // Iterate through each byte in the input text
   for (size_t i = 0; i < length; i++) {
     uint8_t byte = data[i];
 
-    // Follow failure links until we find a node that has a child for the current byte
-    // or we reach a point where we need to restart from root
     while (node && node->children.find(byte) == node->children.end()) {
       node = node->fail;
     }
 
-    // If we've reached null, restart from root
-    // Otherwise, move to the child node that matches the current byte
     if (!node) {
       node = m_root;
     } else {
       node = node->children.find(byte)->second;
     }
 
-    // Return immediately when we find the first match (to make ts faster)
     if (!node->output.empty()) {
-      matches.emplace_back(node->output[0], i);
-      return matches;
+      for (size_t patternIndex : node->output) {
+        const size_t patternLength = m_patterns[patternIndex].size();
+        if (patternLength == 0 || patternLength > i + 1) {
+          continue;
+        }
+
+        matches.push_back(Match{
+            .patternIndex = patternIndex,
+            .startPos = i + 1 - patternLength,
+            .endPos = i});
+        if (m_quitOnFirstMatch) {
+          return matches;
+        }
+      }
     }
   }
 

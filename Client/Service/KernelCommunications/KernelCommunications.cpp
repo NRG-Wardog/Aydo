@@ -3,7 +3,8 @@
 #include "../../IOCTLs.hpp"
 
 KernelCommunications::KernelCommunications()
-    : m_hDevice(INVALID_HANDLE_VALUE) {
+    : m_hControlDevice(INVALID_HANDLE_VALUE)
+    , m_hNotificationDevice(INVALID_HANDLE_VALUE) {
 }
 
 KernelCommunications::~KernelCommunications() {
@@ -16,44 +17,70 @@ bool KernelCommunications::connect(const std::wstring &devicePath) {
     return true;
   }
 
-  m_hDevice = CreateFileW(
+  constexpr DWORD SHARED_ACCESS = FILE_SHARE_READ | FILE_SHARE_WRITE;
+
+  m_hControlDevice = CreateFileW(
       devicePath.c_str(),
       GENERIC_READ | GENERIC_WRITE,
-      0,
+      SHARED_ACCESS,
       nullptr,
       OPEN_EXISTING,
       FILE_ATTRIBUTE_NORMAL,
       nullptr);
 
-  return m_hDevice != INVALID_HANDLE_VALUE;
+  if (m_hControlDevice == INVALID_HANDLE_VALUE) {
+    return false;
+  }
+
+  m_hNotificationDevice = CreateFileW(
+      devicePath.c_str(),
+      GENERIC_READ | GENERIC_WRITE,
+      SHARED_ACCESS,
+      nullptr,
+      OPEN_EXISTING,
+      FILE_ATTRIBUTE_NORMAL,
+      nullptr);
+
+  if (m_hNotificationDevice == INVALID_HANDLE_VALUE) {
+    CloseHandle(m_hControlDevice);
+    m_hControlDevice = INVALID_HANDLE_VALUE;
+    return false;
+  }
+
+  return true;
 }
 
 void KernelCommunications::disconnect() {
-  if (!isConnected()) {
-    return;
+  if (m_hControlDevice != INVALID_HANDLE_VALUE) {
+    CloseHandle(m_hControlDevice);
+    m_hControlDevice = INVALID_HANDLE_VALUE;
   }
 
-  CloseHandle(m_hDevice);
-  m_hDevice = INVALID_HANDLE_VALUE;
+  if (m_hNotificationDevice != INVALID_HANDLE_VALUE) {
+    CloseHandle(m_hNotificationDevice);
+    m_hNotificationDevice = INVALID_HANDLE_VALUE;
+  }
 }
 
 bool KernelCommunications::isConnected() const {
-  return m_hDevice != INVALID_HANDLE_VALUE;
+  return m_hControlDevice != INVALID_HANDLE_VALUE &&
+         m_hNotificationDevice != INVALID_HANDLE_VALUE;
 }
 
-bool KernelCommunications::sendIoctl(DWORD ioctlCode,
+bool KernelCommunications::sendIoctl(HANDLE deviceHandle,
+                                     DWORD ioctlCode,
                                      void *inputBuffer,
                                      DWORD inputSize,
                                      void *outputBuffer,
                                      DWORD outputSize,
                                      DWORD *bytesReturned) {
-  if (!isConnected()) {
+  if (deviceHandle == INVALID_HANDLE_VALUE) {
     return false;
   }
 
   DWORD bytesRet = 0;
   BOOL result = DeviceIoControl(
-      m_hDevice,
+      deviceHandle,
       ioctlCode,
       inputBuffer,
       inputSize,
@@ -73,16 +100,34 @@ bool KernelCommunications::killProcess(ULONG processId) {
   IOCTL_KILL_PROCESS_INPUT input;
   input.ProcessId = processId;
 
-  return sendIoctl(IOCTL_KILL_PROCESS, &input, sizeof(input), nullptr, 0);
+  return sendIoctl(m_hControlDevice, IOCTL_KILL_PROCESS, &input, sizeof(input), nullptr, 0);
+}
+
+bool KernelCommunications::resumeProcess(ULONG processId) {
+  IOCTL_RESUME_PROCESS_INPUT input;
+  input.ProcessId = processId;
+
+  return sendIoctl(m_hControlDevice, IOCTL_RESUME_PROCESS, &input, sizeof(input), nullptr, 0);
 }
 
 std::optional<IOCTL_GET_PROCESS_NOTIFICATION_OUTPUT> KernelCommunications::getProcessNotification() {
   IOCTL_GET_PROCESS_NOTIFICATION_OUTPUT output;
   DWORD bytesReturned = 0;
 
-  if (sendIoctl(IOCTL_GET_PROCESS_NOTIFICATION, nullptr, 0, &output, sizeof(output), &bytesReturned) && bytesReturned == sizeof(output)) {
+  if (sendIoctl(m_hNotificationDevice,
+                IOCTL_GET_PROCESS_NOTIFICATION,
+                nullptr,
+                0,
+                &output,
+                sizeof(output),
+                &bytesReturned) &&
+      bytesReturned == sizeof(output)) {
     return output;
   }
 
   return std::nullopt;
+}
+
+bool KernelCommunications::registerSelfAsService() {
+  return sendIoctl(m_hControlDevice, IOCTL_REGISTER_SERVICE, nullptr, 0, nullptr, 0);
 }

@@ -6,12 +6,15 @@ import subprocess
 SEPERATOR = ':'
 NAME_INDEX = 0
 SIGNATURE_INDEX = 3
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(SCRIPT_DIR)
+DATA_DIR = os.path.join(REPO_ROOT, "data")
 DATABASE_FILE_URL = "https://database.clamav.net/main.cvd"
-DATABASE_FILE_NAME = "../data/main.cvd"
-EXTRACT_DATABASE_FILE_TO = "../data/file_signatures"
+DATABASE_FILE_NAME = os.path.join(DATA_DIR, "main.cvd")
+EXTRACT_DATABASE_FILE_TO = os.path.join(DATA_DIR, "file_signatures")
 SIGTOOL_PATH = os.path.expandvars("%USERPROFILE%\\Downloads\\clamav-1.4.3.win.x64\\clamav-1.4.3.win.x64\\sigtool.exe")
 DATABASE_FILE = "main.ndb"
-OUTPUT_FILE = "../data/file_signatures.json"
+OUTPUT_FILE = os.path.join(DATA_DIR, "file_signatures.json")
 SIGNATURE_WILDCARDS = ["*", "?", "|", "(", ")", "{", "}", "/"]
 
 
@@ -27,7 +30,7 @@ def extract_database(database_file: str, output_path: str) -> None:
     if not os.path.exists(output_path):
         os.makedirs(output_path)
 
-    subprocess.run([SIGTOOL_PATH, "--unpack", database_file], cwd=output_path)
+    subprocess.run([SIGTOOL_PATH, "--unpack", database_file], cwd=output_path, check=True)
 
     print(f"Database extracted successfully to {output_path}")
 
@@ -49,12 +52,15 @@ def parse_database(database_file: str, output_file_path: str) -> None:
         "complex": {}
     }
 
-    
     with open(database_file, 'r') as f:
         lines = f.readlines()
 
-        for line in lines:
-            name, signature = parse_line(line)
+        for line_number, line in enumerate(lines, start=1):
+            try:
+                name, signature = parse_line(line)
+            except ValueError as e:
+                print(f"Skipping malformed line {line_number}: {e}")
+                continue
 
             signature = signature.strip() # Remove new line character from the end of the signature
 
@@ -64,7 +70,7 @@ def parse_database(database_file: str, output_file_path: str) -> None:
             else:
                 signature_name_map["simple"][signature] = name
 
-
+    os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
     with open(output_file_path, 'w') as f:
         json.dump(signature_name_map, f)
 
@@ -73,6 +79,10 @@ def parse_database(database_file: str, output_file_path: str) -> None:
 
 def parse_line(line: str) -> tuple[str, str]:
     parts = line.split(SEPERATOR)
+    if len(parts) <= SIGNATURE_INDEX:
+        raise ValueError(
+            f"expected at least {SIGNATURE_INDEX + 1} fields, got {len(parts)}"
+        )
 
     name = parts[NAME_INDEX]
     signature = parts[SIGNATURE_INDEX]
@@ -99,7 +109,7 @@ def main() -> None:
 
     steps = [
         (args.download, download_step, "downloading database"),
-        (args.extract,  lambda: extract_database(os.path.abspath(DATABASE_FILE_NAME), os.path.abspath(EXTRACT_DATABASE_FILE_TO)), "extracting database"),
+        (args.extract,  lambda: extract_database(DATABASE_FILE_NAME, EXTRACT_DATABASE_FILE_TO), "extracting database"),
         (args.parse,    lambda: parse_database(os.path.join(EXTRACT_DATABASE_FILE_TO, DATABASE_FILE), OUTPUT_FILE), "parsing database"),
     ]
 

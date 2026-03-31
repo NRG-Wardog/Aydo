@@ -1,0 +1,169 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Name="Aydo Security"
+    Manufacturer="Aydo"
+    Version="1.0.0.0"
+    UpgradeCode="4DB59D14-B014-42AF-B4FB-9A6C5783F309"
+    Scope="perMachine"
+  >
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Aydo Security is already installed." />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Aydo Security" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder" />
+
+    <Feature Id="CompleteFeature" Title="Aydo Security" Level="1">
+      <ComponentGroupRef Id="MainComponents" />
+      <ComponentGroupRef Id="RuntimeDllFiles" />
+      <ComponentGroupRef Id="GuiFiles" />
+      <ComponentGroupRef Id="DataFiles" />
+    </Feature>
+
+    <InstallExecuteSequence>
+      <Custom
+        Action="CreateKernelDriverService"
+        After="InstallFiles"
+        Condition="NOT Installed"
+      />
+      <Custom
+        Action="DeleteKernelDriverService"
+        Before="RemoveFiles"
+        Condition='REMOVE~="ALL"'
+      />
+      <Custom
+        Action="DeleteKernelDriverServiceFinal"
+        Before="RemoveFiles"
+        Condition='REMOVE~="ALL"'
+      />
+    </InstallExecuteSequence>
+  </Package>
+
+  <Fragment>
+    <CustomAction
+      Id="CreateKernelDriverService"
+      Directory="SystemFolder"
+      Execute="deferred"
+      Impersonate="no"
+      Return="check"
+      ExeCommand='sc.exe create AydoKernelDriver type= kernel start= auto error= normal displayname= "Aydo Kernel Driver" binPath= "[#KernelDriverSys]"'
+    />
+    <CustomAction
+      Id="DeleteKernelDriverService"
+      Directory="SystemFolder"
+      Execute="deferred"
+      Impersonate="no"
+      Return="ignore"
+      ExeCommand="sc.exe stop AydoKernelDriver"
+    />
+    <CustomAction
+      Id="DeleteKernelDriverServiceFinal"
+      Directory="SystemFolder"
+      Execute="deferred"
+      Impersonate="no"
+      Return="ignore"
+      ExeCommand="sc.exe delete AydoKernelDriver"
+    />
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="MainComponents">
+      <Component
+        Id="KernelDriverComponent"
+        Directory="INSTALLFOLDER"
+        Guid="*"
+        Bitness="always64"
+      >
+        <File
+          Id="KernelDriverSys"
+          Source="..\x64\Release\KernelDriver.sys"
+          KeyPath="yes"
+        />
+      </Component>
+
+      <Component
+        Id="ServiceExecutableComponent"
+        Directory="INSTALLFOLDER"
+        Guid="*"
+        Bitness="always64"
+      >
+        <File
+          Id="ServiceExe"
+          Source="..\x64\Release\Service.exe"
+          KeyPath="yes"
+        />
+      </Component>
+
+      <Component
+        Id="ServiceRunKeyComponent"
+        Directory="INSTALLFOLDER"
+        Guid="*"
+        Bitness="always64"
+      >
+        <RegistryValue
+          Root="HKLM"
+          Key="Software\Microsoft\Windows\CurrentVersion\Run"
+          Name="AydoService"
+          Type="string"
+          Value='"[INSTALLFOLDER]Service.exe"'
+          KeyPath="yes"
+        />
+      </Component>
+
+      <Component
+        Id="GuiDesktopShortcutComponent"
+        Directory="DesktopFolder"
+        Guid="*"
+        Bitness="always64"
+      >
+        <Shortcut
+          Id="AydoGuiDesktopShortcut"
+          Name="Aydo Security"
+          Target="[INSTALLFOLDER]Aydo Security.exe"
+          WorkingDirectory="INSTALLFOLDER"
+        />
+        <RemoveFolder Id="RemoveDesktopFolderEntry" On="uninstall" />
+        <RegistryValue
+          Root="HKCU"
+          Key="Software\Aydo\Installer"
+          Name="DesktopShortcut"
+          Type="integer"
+          Value="1"
+          KeyPath="yes"
+        />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="RuntimeDllFiles" Directory="INSTALLFOLDER">
+      <Files Include="..\x64\Release\*.dll" />
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="GuiFiles" Directory="INSTALLFOLDER">
+      <Files Include="..\Client\GUI\release\win-unpacked\**" />
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="DataFiles" Directory="INSTALLFOLDER">
+      <Component Id="AaaArchive" Guid="*">
+        <File
+          Id="Aaa7z"
+          Source="C:\Dev\Magshii\Project\FFFFFFFF\data\aaa.7z"
+          KeyPath="yes"
+        />
+      </Component>
+      <Component Id="FileHashesDb" Guid="*">
+        <File
+          Id="FileHashesDbFile"
+          Source="C:\Dev\Magshii\Project\AAAAAAA\aydo\data\file_hashes.db"
+          KeyPath="yes"
+        />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

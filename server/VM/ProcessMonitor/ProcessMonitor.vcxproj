@@ -85,53 +85,98 @@
   <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <VcpkgUseStatic>true</VcpkgUseStatic>
   </PropertyGroup>
+  <!-- =======================
+       Debug | Win32
+       ======================= -->
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;SQLITE_API=;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <LanguageStandard>stdcpp23</LanguageStandard>
+      <AdditionalIncludeDirectories>
+        $(ProjectDir);
+        $(ProjectDir)include;
+        $(ProjectDir)include\core;
+        $(ProjectDir)include\etw;
+        $(ProjectDir)include\storage;
+        $(ProjectDir)include\analysis;
+        $(ProjectDir)include\detectors;
+        %(AdditionalIncludeDirectories)
+      </AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>advapi32.lib;tdh.lib;wevtapi.lib;uuid.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
+  <!-- =======================
+       Release | Win32
+       ======================= -->
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;SQLITE_API=;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <LanguageStandard>stdcpp23</LanguageStandard>
+      <AdditionalIncludeDirectories>
+        $(ProjectDir);
+        $(ProjectDir)include;
+        $(ProjectDir)include\core;
+        $(ProjectDir)include\etw;
+        $(ProjectDir)include\storage;
+        $(ProjectDir)include\analysis;
+        $(ProjectDir)include\detectors;
+        %(AdditionalIncludeDirectories)
+      </AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>advapi32.lib;tdh.lib;wevtapi.lib;uuid.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
+  <!-- =======================
+       Debug | x64
+       ======================= -->
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;SQLITE_API=;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um;C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared;C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\ucrt;D:\vcpkg\installed;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp23</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <AdditionalIncludeDirectories>
+        $(ProjectDir);
+$(ProjectDir)include;$(ProjectDir)include\core;$(ProjectDir)include\etw;$(ProjectDir)include\storage;$(ProjectDir)include\analysis;$(ProjectDir)include\detectors;
+        C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um;
+        C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared;
+        C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\ucrt;
+        D:\vcpkg\installed\x64-windows\include;
+        D:\vcpkg\installed\x64-windows-static\include;
+        %(AdditionalIncludeDirectories)
+      </AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>advapi32.lib;tdh.lib;uuid.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\um\x64</AdditionalLibraryDirectories>
+      <AdditionalDependencies>advapi32.lib;tdh.lib;wevtapi.lib;uuid.lib;sqlite3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\um\x64;D:\vcpkg\installed\x64-windows-static\debug\lib;D:\vcpkg\installed\x64-windows-static\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
   </ItemDefinitionGroup>
+  <!-- =======================
+       Release | x64
+       ======================= -->
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -142,36 +187,85 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp23</LanguageStandard>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalIncludeDirectories>C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared;C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um;C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\ucrt;D:\vcpkg\installed\x64-windows\include;D:\vcpkg\installed\x64-windows-static\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>
+        $(ProjectDir);
+$(ProjectDir)include;$(ProjectDir)include\core;$(ProjectDir)include\etw;$(ProjectDir)include\storage;$(ProjectDir)include\analysis;$(ProjectDir)include\detectors;
+        C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared;
+        C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um;
+        C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\ucrt;
+        D:\vcpkg\installed\x64-windows\include;
+        D:\vcpkg\installed\x64-windows-static\include;
+        %(AdditionalIncludeDirectories)
+      </AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>advapi32.lib;tdh.lib;uuid.lib</AdditionalDependencies>
+      <AdditionalDependencies>advapi32.lib;tdh.lib;wevtapi.lib;uuid.lib;sqlite3.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
-      <AdditionalLibraryDirectories>D:\vcpkg\installed\x64-windows-static\lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>D:\vcpkg\installed\x64-windows-static\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
+  <!-- =======================
+       Source files
+       ======================= -->
   <ItemGroup>
-    <ClCompile Include="EtwGuids.hpp" />
-    <ClCompile Include="KernelBlock.cpp" />
-    <ClCompile Include="EventWriter.cpp" />
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="ProcessMonitor.cpp" />
-    <ClInclude Include="SqlRequests.hpp" />
-    <ClCompile Include="UserBlock.cpp" />
-    <ClCompile Include="Utils.cpp" />
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\ProcessMonitor.cpp" />
+    <ClCompile Include="src\EventWriter.cpp" />
+    <ClCompile Include="src\KernelBlock.cpp" />
+    <ClCompile Include="src\UserBlock.cpp" />
+    <ClCompile Include="src\Utils.cpp" />
+    <ClCompile Include="src\ProviderProfiles.cpp" />
+    <ClCompile Include="src\AttackMetadata.cpp" />
+    <ClCompile Include="src\ThreadAnalysisEngine.cpp" />
+    <ClCompile Include="src\ThreadCaches.cpp" />
+    <ClCompile Include="src\ThreadHelpers.cpp" />
+    <ClCompile Include="src\SelfTest.cpp" />
+    <ClCompile Include="src\SelfTestLive.cpp" />
+    <ClCompile Include="src\detectors\RemoteThreadCreationDetector.cpp" />
+    <ClCompile Include="src\detectors\AsynchronousProcedureCallQueueingDetector.cpp" />
+    <ClCompile Include="src\detectors\ThreadHijackDetector.cpp" />
+    <ClCompile Include="src\detectors\ThreatIntelInjectionDetector.cpp" />
+    <ClCompile Include="src\detectors\RegistryRunKeyPersistenceDetector.cpp" />
+    <ClCompile Include="src\detectors\ScheduledTaskPersistenceDetector.cpp" />
+    <ClCompile Include="src\detectors\ServicePersistenceDetector.cpp" />
+    <ClCompile Include="src\detectors\LsassCredentialAccessDetector.cpp" />
   </ItemGroup>
+  <!-- =======================
+       Header files
+       ======================= -->
   <ItemGroup>
-    <ClInclude Include="Caches.hpp" />
-    <ClInclude Include="Constants.hpp" />
-    <ClInclude Include="KernelBlock.hpp" />
-    <ClInclude Include="EventWriter.hpp" />
     <ClInclude Include="pch.h" />
-    <ClInclude Include="ProcessMonitor.hpp" />
-    <ClInclude Include="Threads.hpp" />
-    <ClInclude Include="UserBlock.hpp" />
-    <ClInclude Include="Utils.hpp" />
+    <ClInclude Include="include\core\ProcessMonitor.hpp" />
+    <ClInclude Include="include\core\Caches.hpp" />
+    <ClInclude Include="include\core\Constants.hpp" />
+    <ClInclude Include="include\core\Threads.hpp" />
+    <ClInclude Include="include\core\SelfTest.hpp" />
+    <ClInclude Include="include\etw\EtwGuids.hpp" />
+    <ClInclude Include="include\etw\KernelBlock.hpp" />
+    <ClInclude Include="include\etw\ProviderProfiles.hpp" />
+    <ClInclude Include="include\etw\UserBlock.hpp" />
+    <ClInclude Include="include\storage\EventWriter.hpp" />
+    <ClInclude Include="include\storage\EventWriterConstants.hpp" />
+    <ClInclude Include="include\storage\SqlRequests.hpp" />
+    <ClInclude Include="include\analysis\CrossProcWindow.hpp" />
+    <ClInclude Include="include\analysis\Finding.hpp" />
+    <ClInclude Include="include\analysis\IThreadDetector.hpp" />
+    <ClInclude Include="include\analysis\NormalizedEvent.hpp" />
+    <ClInclude Include="include\analysis\AttackMetadata.hpp" />
+    <ClInclude Include="include\analysis\ThreadAnalysisEngine.hpp" />
+    <ClInclude Include="include\analysis\ThreadCaches.hpp" />
+    <ClInclude Include="include\analysis\ThreadHelpers.hpp" />
+    <ClInclude Include="include\analysis\ThreadState.hpp" />
+    <ClInclude Include="include\detectors\RemoteThreadCreationDetector.hpp" />
+    <ClInclude Include="include\detectors\AsynchronousProcedureCallQueueingDetector.hpp" />
+    <ClInclude Include="include\detectors\ThreadHijackDetector.hpp" />
+    <ClInclude Include="include\detectors\ThreatIntelInjectionDetector.hpp" />
+    <ClInclude Include="include\detectors\RegistryRunKeyPersistenceDetector.hpp" />
+    <ClInclude Include="include\detectors\ScheduledTaskPersistenceDetector.hpp" />
+    <ClInclude Include="include\detectors\ServicePersistenceDetector.hpp" />
+    <ClInclude Include="include\detectors\LsassCredentialAccessDetector.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

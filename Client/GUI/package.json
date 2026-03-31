@@ -1,0 +1,76 @@
+{
+  "name": "aydo-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/main/index.js",
+  "packageManager": "bun@1.1.0",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "package": "bunx electron-builder",
+    "test:e2e": "bun run build && bunx playwright test"
+  },
+  "dependencies": {
+    "@nextui-org/react": "^2.6.0",
+    "@nextui-org/theme": "^2.2.0",
+    "clsx": "^2.1.0",
+    "date-fns": "^3.6.0",
+    "framer-motion": "^11.0.0",
+    "lucide-react": "^0.373.0",
+    "next-themes": "^0.3.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.22.0",
+    "recharts": "^2.12.0",
+    "sonner": "^1.5.0",
+    "tailwind-merge": "^2.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.0",
+    "@playwright/test": "^1.48.0",
+    "electron": "^30.0.0",
+    "electron-builder": "^24.9.0",
+    "electron-vite": "^2.1.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.2.0"
+  },
+  "build": {
+    "appId": "com.aydo.desktop",
+    "productName": "Aydo Security",
+    "directories": {
+      "output": "release",
+      "buildResources": "assets/brand"
+    },
+    "icon": "assets/brand/icon.png",
+    "files": [
+      "dist/**"
+    ],
+    "asar": true,
+    "win": {
+      "icon": "assets/brand/icon.png",
+      "target": [
+        "nsis"
+      ]
+    },
+    "mac": {
+      "icon": "assets/brand/icon.png",
+      "target": [
+        "dmg"
+      ]
+    },
+    "linux": {
+      "icon": "assets/brand/icon.png",
+      "target": [
+        "AppImage"
+      ]
+    }
+  }
+}

@@ -6,6 +6,8 @@
 #include <utility>
 #include <vector>
 
+#include "AhoCorasick.hpp"
+
 namespace ACUtils {
 enum class Constraint : char {
   ONE_BYTE = '?',
@@ -35,7 +37,7 @@ SegmentPositions findSegmentPositionsInMemory(const std::vector<uint8_t> &data, 
 
 // Helper: process Aho-Corasick matches and record start positions, with optional base offset
 void processMatchesAndRecordPositions(
-    const std::vector<std::pair<size_t, size_t>> &matches,
+    const std::vector<AhoCorasick::Match> &matches,
     const std::vector<std::vector<uint8_t>> &allSegments,
     size_t baseOffset,
     SegmentPositions &segmentPositions);

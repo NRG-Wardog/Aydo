@@ -14,6 +14,10 @@ typedef struct _IOCTL_KILL_PROCESS_INPUT {
   ULONG ProcessId;
 } IOCTL_KILL_PROCESS_INPUT;
 
+typedef struct _IOCTL_RESUME_PROCESS_INPUT {
+  ULONG ProcessId;
+} IOCTL_RESUME_PROCESS_INPUT;
+
 typedef struct _PROCESS_NOTIFICATION {
   ULONG ProcessId;
   ULONG ParentProcessId;

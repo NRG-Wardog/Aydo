@@ -14,6 +14,10 @@ User::User(const drogon::orm::Row &row) {
     m_email = row["email"].as<std::string>();
     m_nickname = row["nickname"].as<std::string>();
     m_passwordHash = row["passwordHash"].as<std::string>();
+    m_createdAt =
+        trantor::Date::fromDbString(row["createdAt"].as<std::string>());
+    m_updatedAt =
+        trantor::Date::fromDbString(row["updatedAt"].as<std::string>());
   } catch (const std::exception &e) {
     LOG_WARN << "Failed to parse User from row: " << e.what();
   } catch (...) {
@@ -25,7 +29,7 @@ std::optional<User> User::getByEmail(const DbClientPtr &dbClient,
                                      const std::string &email) {
   try {
     auto result = dbClient->execSqlSync(
-        "SELECT id, email, nickname, passwordHash FROM users WHERE email = $1 LIMIT 1",
+        "SELECT id, email, nickname, passwordHash, createdAt, updatedAt FROM users WHERE email = $1 LIMIT 1",
         email);
 
     if (result.empty()) {

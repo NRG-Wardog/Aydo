@@ -1,59 +1,89 @@
-; KernelDriver.inf
-
 [Version]
 Signature   = "$WINDOWS NT$"
 Class       = System
 ClassGuid   = {4d36e97d-e325-11ce-bfc1-08002be10318}
 Provider    = %ManufacturerName%
 CatalogFile = KernelDriver.cat
-DriverVer   = 09/25/2025,1.0.0.0
+DriverVer   = 01/10/2026,1.0.0.0
 PnpLockdown = 1
 
 [DestinationDirs]
-DefaultDestDir = 12   ; %12% = drivers directory
+DefaultDestDir          = 12
+KernelDriver.DriverFiles = 12            ;%windir%\system32\drivers
 
 [SourceDisksNames]
 1 = %DiskName%,,,""
 
 [SourceDisksFiles]
-KernelDriver.sys = 1
+KernelDriver.sys = 1,,
 
-;*****************************************
-; Install Section
-;*****************************************
+;;
+;; Default install sections
+;;
 
-[Manufacturer]
-%ManufacturerName% = Standard,NTamd64
+[DefaultInstall.NTamd64]
+OptionDesc          = %ServiceDescription%
+CopyFiles           = KernelDriver.DriverFiles
 
-[Standard.NTamd64]
-%KernelDriver.DeviceDesc% = KernelDriver_Install, Root\KernelDriver
+[DefaultInstall.NTamd64.Services]
+AddService          = %ServiceName%,,KernelDriver.Service
 
-[KernelDriver_Install.NT]
-CopyFiles = File_Copy
+;;
+;; Default uninstall sections
+;;
 
-[File_Copy]
-KernelDriver.sys
+[DefaultUninstall.NTamd64]
+LegacyUninstall     = 1
+DelFiles            = KernelDriver.DelFiles
 
-;-------------- Service installation
-[KernelDriver_Install.NT.Services]
-AddService = KernelDriver,%SPSVCINST_ASSOCSERVICE%, KernelDriver_Service_Inst
+[DefaultUninstall.NTamd64.Services]
+DelService = %ServiceName%,0x200      ;Ensure service is stopped before deleting
 
-[KernelDriver_Service_Inst]
-DisplayName    = %KernelDriver.SVCDESC%
-ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
-StartType      = 3               ; SERVICE_DEMAND_START
-ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
-ServiceBinary  = %12%\KernelDriver.sys
+;
+; Services Section - Hybrid driver (both kernel driver and filter)
+;
 
-[KernelDriver_Install.NT.Wdf]
-KmdfService = KernelDriver, KernelDriver_wdfsect
+[KernelDriver.Service]
+DisplayName      = %ServiceName%
+Description      = %ServiceDescription%
+ServiceBinary    = %12%\%DriverFileName%        ;Reference the copied file from CopyFiles
+Dependencies     = "FltMgr"
+ServiceType      = 1                            ;SERVICE_KERNEL_DRIVER (not filesys - this allows both functionalities)
+StartType        = 3                            ;SERVICE_DEMAND_START
+ErrorControl     = 1                            ;SERVICE_ERROR_NORMAL
+LoadOrderGroup   = "FSFilter Activity Monitor"  ;Load with filter drivers for proper ordering
+;
+; Registry Modifications - Add filter-specific entries for Filter Manager
+;
 
-[KernelDriver_wdfsect]
-KmdfLibraryVersion = 1.33
+[KernelDriver.AddRegistry]
+HKR,"Parameters","DebugFlags",0x00010001 ,0x0
+HKR,"Parameters","SupportedFeatures",0x00010001,0x3
+HKR,"Parameters\Instances","DefaultInstance",0x00000000,%DefaultInstance%
+HKR,"Parameters\Instances\"%Instance1.Name%,"Altitude",0x00000000,%Instance1.Altitude%
+HKR,"Parameters\Instances\"%Instance1.Name%,"Flags",0x00010001,%Instance1.Flags%
+
+;
+; Copy Files
+;
+
+[KernelDriver.DriverFiles]
+%DriverFileName%
+
+;
+; Delete Files (for uninstall)
+;
+
+[KernelDriver.DelFiles]
+%DriverFileName%
 
 [Strings]
-SPSVCINST_ASSOCSERVICE = 0x00000002
-ManufacturerName       = "Aydo"
-DiskName               = "KernelDriver Installation Disk"
-KernelDriver.DeviceDesc = "Kernel Driver Device"
-KernelDriver.SVCDESC    = "Kernel Driver Service"
+ManufacturerName        = "Aydo"
+ServiceName             = "KD2"
+ServiceDescription      = "Aydo Kernel Driver"
+DiskName                = "KernelDriver Installation Disk"
+DriverFileName          = "KernelDriver.sys"
+DefaultInstance         = "KD2 Instance"
+Instance1.Name          = "KD2 Instance"
+Instance1.Altitude      = "320000"
+Instance1.Flags         = 0x0          ; Allow all attachments

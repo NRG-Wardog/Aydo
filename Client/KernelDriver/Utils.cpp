@@ -4,6 +4,11 @@
 #include "Logger.hpp"
 #include "Types.hpp"
 
+extern "C" {
+NTSTATUS PsSuspendProcess(PEPROCESS Process);
+NTSTATUS PsResumeProcess(PEPROCESS Process);
+}
+
 static LIST_ENTRY g_ProcessNotificationQueue;
 static KSPIN_LOCK g_QueueLock;
 static BOOLEAN g_IsInitialized = FALSE;
@@ -13,36 +18,23 @@ static BOOLEAN g_IsInitialized = FALSE;
 NTSTATUS Utils::killProcessByPID(ULONG pid) {
   LOG_INFO("Killing process by PID: %lu", pid);
 
-  // Find the process
   PEPROCESS process;
-  if (!NT_SUCCESS(PsLookupProcessByProcessId(ULongToHandle(pid), &process))) {
-    LOG_ERROR("Failed to find process by PID: %lu", pid);
-
-    return STATUS_INVALID_PARAMETER;
-  }
-
-  // Open the process
   HANDLE hProcess;
-  if (!NT_SUCCESS(ObOpenObjectByPointer(process, OBJ_KERNEL_HANDLE, nullptr, PROCESS_TERMINATE, *PsProcessType, KernelMode, &hProcess))) {
-    LOG_ERROR("Failed to open process by PID: %lu", pid);
-    ObDereferenceObject(process);
+  NTSTATUS status;
 
-    return STATUS_UNSUCCESSFUL;
-  }
+  status = PsLookupProcessByProcessId(ULongToHandle(pid), &process);
+  CHECK_NT_RETURN(status, "Failed to find process by PID: %lu (0x%X)", pid, status);
 
-  // Terminate the process
-  NTSTATUS terminateStatus = ZwTerminateProcess(hProcess, STATUS_SUCCESS);
-  if (!NT_SUCCESS(terminateStatus)) {
-    LOG_ERROR("Failed to terminate process by PID: %lu, status: 0x%X", pid, terminateStatus);
-  } else {
-    LOG_INFO("Process by PID: %lu terminated successfully", pid);
-  }
+  status = ObOpenObjectByPointer(process, OBJ_KERNEL_HANDLE, nullptr, PROCESS_TERMINATE, *PsProcessType, KernelMode, &hProcess);
+  CHECK_NT_RETURN_CLEANUP(status, ObDereferenceObject(process), "Failed to open process by PID: %lu (0x%X)", pid, status);
 
-  // Close the process
+  status = ZwTerminateProcess(hProcess, STATUS_SUCCESS);
+  CHECK_NT_RETURN_CLEANUP(status, (ZwClose(hProcess), ObDereferenceObject(process)), "Failed to terminate process by PID: %lu (0x%X)", pid, status);
+
   ZwClose(hProcess);
   ObDereferenceObject(process);
-
-  return terminateStatus;
+  LOG_INFO("Process by PID: %lu terminated successfully", pid);
+  return status;
 }
 
 // Checks if a process is killable by its PID (it's not in the protected list and is not critical)
@@ -58,35 +50,26 @@ bool Utils::isProcessKillable(ULONG pid) {
     }
   }
 
-  // Find the process
   PEPROCESS process;
-  if (!NT_SUCCESS(PsLookupProcessByProcessId(ULongToHandle(pid), &process))) {
-    LOG_ERROR("Failed to find process by PID: %lu", pid);
-
-    return false;
-  }
-
-  // Open the process
   HANDLE hProcess;
-  if (!NT_SUCCESS(ObOpenObjectByPointer(process, OBJ_KERNEL_HANDLE, nullptr, PROCESS_QUERY_INFORMATION, *PsProcessType, KernelMode, &hProcess))) {
-    LOG_ERROR("Failed to open process by PID: %lu for query", pid);
-    ObDereferenceObject(process);
-
-    return false;
-  }
-
-  // Check if the process is critical
+  NTSTATUS status;
   ULONG isCritical = 0;
   ULONG returnLength = 0;
-  NTSTATUS status = ZwQueryInformationProcess(hProcess, ProcessBreakOnTermination, &isCritical, sizeof(isCritical), &returnLength);
+
+  status = PsLookupProcessByProcessId(ULongToHandle(pid), &process);
+  CHECK_NT_RETURN_FALSE(status, "Failed to find process by PID: %lu (0x%X)", pid, status);
+
+  status = ObOpenObjectByPointer(process, OBJ_KERNEL_HANDLE, nullptr, PROCESS_QUERY_INFORMATION, *PsProcessType, KernelMode, &hProcess);
+  CHECK_NT_RETURN_FALSE_CLEANUP(status, ObDereferenceObject(process), "Failed to open process by PID: %lu for query (0x%X)", pid, status);
+
+  status = ZwQueryInformationProcess(hProcess, ProcessBreakOnTermination, &isCritical, sizeof(isCritical), &returnLength);
 
   ZwClose(hProcess);
   ObDereferenceObject(process);
 
   if (!NT_SUCCESS(status)) {
     LOG_WARNING("Failed to query critical status for process by PID: %lu, status: 0x%X", pid, status);
-
-    return true; // If we can't query, assume it's killable
+    return false; // If we can't query, assume it's not killable
   }
 
   return isCritical == 0;
@@ -100,17 +83,11 @@ NTSTATUS Utils::initializeProcessNotifications() {
   InitializeListHead(&g_ProcessNotificationQueue);
   KeInitializeSpinLock(&g_QueueLock);
 
-  // Register the process notification callback
   NTSTATUS status = PsSetCreateProcessNotifyRoutineEx(Hooks::onProcessStart, FALSE);
-  if (!NT_SUCCESS(status)) {
-    LOG_ERROR("Failed to register process notify routine, status: 0x%X", status);
-
-    return status;
-  }
+  CHECK_NT_RETURN(status, "Failed to register process notify routine (0x%X)", status);
 
   g_IsInitialized = TRUE;
   LOG_INFO("Process notifications initialized successfully");
-
   return STATUS_SUCCESS;
 }
 
@@ -119,26 +96,37 @@ VOID Utils::cleanupProcessNotifications() {
     return;
   }
 
-  // Unregister the callback
+  LOG_INFO("Starting process notifications cleanup");
+
+  // Unregister the callback first
   NTSTATUS status = PsSetCreateProcessNotifyRoutineEx(Hooks::onProcessStart, TRUE);
   if (!NT_SUCCESS(status)) {
     LOG_ERROR("Failed to unregister process notify routine, status: 0x%X", status);
+  } else {
+    LOG_INFO("Process notify routine unregistered successfully");
   }
+
+  // Wait a bit to ensure no more callbacks are coming
+  LARGE_INTEGER delay;
+  delay.QuadPart = -10000 * 50; // 50ms delay
+  KeDelayExecutionThread(KernelMode, FALSE, &delay);
 
   // Clean up the queue
   KIRQL oldIrql;
   KeAcquireSpinLock(&g_QueueLock, &oldIrql);
 
+  ULONG notificationCount = 0;
   while (!IsListEmpty(&g_ProcessNotificationQueue)) {
     PLIST_ENTRY entry = RemoveHeadList(&g_ProcessNotificationQueue);
     PPROCESS_NOTIFICATION notification = CONTAINING_RECORD(entry, PROCESS_NOTIFICATION, ListEntry);
     ExFreePoolWithTag(notification, 'nPrP');
+    notificationCount++;
   }
 
   KeReleaseSpinLock(&g_QueueLock, oldIrql);
 
   g_IsInitialized = FALSE;
-  LOG_INFO("Process notifications cleaned up successfully");
+  LOG_INFO("Process notifications cleaned up successfully, freed %lu notifications", notificationCount);
 }
 
 PVOID Utils::dequeueProcessNotification() {
@@ -166,10 +154,48 @@ VOID Utils::enqueueProcessNotification(PVOID notificationPtr) {
     return;
   }
 
-  PPROCESS_NOTIFICATION notification = (PPROCESS_NOTIFICATION)notificationPtr;
+  auto notification = (PPROCESS_NOTIFICATION)notificationPtr;
 
   KIRQL oldIrql;
   KeAcquireSpinLock(&g_QueueLock, &oldIrql);
   InsertTailList(&g_ProcessNotificationQueue, &notification->ListEntry);
   KeReleaseSpinLock(&g_QueueLock, oldIrql);
+}
+
+// Suspends a process using PsSuspendProcess
+NTSTATUS Utils::suspendProcess(HANDLE processId) {
+  LOG_INFO("Suspending process by PID: %lu", HandleToULong(processId));
+
+  PEPROCESS process;
+  NTSTATUS status = PsLookupProcessByProcessId(processId, &process);
+  CHECK_NT_RETURN(status, "Failed to find process by PID: %lu (0x%X)", HandleToULong(processId), status);
+
+  status = PsSuspendProcess(process);
+  ObDereferenceObject(process);
+  CHECK_NT_RETURN(status, "Failed to suspend process PID: %lu (0x%X)", HandleToULong(processId), status);
+
+  LOG_INFO("Successfully suspended process PID: %lu", HandleToULong(processId));
+  return STATUS_SUCCESS;
+}
+
+// Resumes a process using PsResumeProcess
+NTSTATUS Utils::resumeProcess(ULONG pid) {
+  LOG_INFO("Resuming process by PID: %lu", pid);
+
+  PEPROCESS process;
+  NTSTATUS status = PsLookupProcessByProcessId(ULongToHandle(pid), &process);
+  CHECK_NT_RETURN(status, "Failed to find process by PID: %lu (0x%X)", pid, status);
+
+  status = PsResumeProcess(process);
+  ObDereferenceObject(process);
+  CHECK_NT_RETURN(status, "Failed to resume process PID: %lu (0x%X)", pid, status);
+
+  LOG_INFO("Successfully resumed process PID: %lu", pid);
+  return STATUS_SUCCESS;
+}
+
+BOOLEAN Utils::isValidUnicodeString(PCUNICODE_STRING unicodeString) {
+  return (unicodeString != nullptr &&
+          unicodeString->Buffer != nullptr &&
+          unicodeString->Length > 0);
 }

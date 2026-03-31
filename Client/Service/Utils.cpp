@@ -4,7 +4,9 @@
 #include <botan/hash.h>
 #include <botan/hex.h>
 #include <cwctype>
+#include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <psapi.h>
 #include <softpub.h>
 #include <vector>
@@ -12,8 +14,6 @@
 
 #include "Constants.hpp"
 #include "Errors.hpp"
-
-using namespace Utils::Const;
 
 std::vector<uint8_t> Utils::readFile(const std::string &path) {
   std::ifstream file(path, std::ios::binary);
@@ -46,13 +46,13 @@ std::wstring Utils::device_to_dos_path(const std::wstring &devicePath) {
   }
 
   // Map \Device\HarddiskVolumeX to a DOS drive letter
-  wchar_t drives[kDriveStringsBufChars] = {0};
-  DWORD len = GetLogicalDriveStringsW(static_cast<DWORD>(std::size(drives) - 1), drives);
+  wchar_t drives[Constants::DRIVE_STRINGS_BUF_CHARS] = {0};
+  GetLogicalDriveStringsW(static_cast<DWORD>(std::size(drives) - 1), drives);
   for (wchar_t const *p = drives; p && *p; p += wcslen(p) + 1) {
     // p is like "C:\"
     const std::wstring dosRoot = p;                  // "C:\"
     const std::wstring drive = dosRoot.substr(0, 2); // "C:"
-    wchar_t target[kDosDeviceTargetBufChars] = {0};
+    wchar_t target[Constants::DOS_DEVICE_TARGET_BUF_CHARS] = {0};
     if (QueryDosDeviceW(drive.c_str(), target, static_cast<DWORD>(std::size(target) - 1))) {
       // target may contain multiple null-terminated strings; we only need the first mapping
       std::wstring dev = target; // e.g. \Device\HarddiskVolume3
@@ -84,7 +84,7 @@ std::optional<std::wstring> Utils::full_image_path_from_pid(DWORD pid) {
   // Prefer QueryFullProcessImageNameW (requires PROCESS_QUERY_LIMITED_INFORMATION)
   HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
   if (h) {
-    DWORD sz = kMaxUnicodePathChars; // max per docs
+    DWORD sz = Constants::MAX_UNICODE_PATH_CHARS; // max per docs
     if (std::wstring buf(sz, L'\0'); QueryFullProcessImageNameW(h, 0, buf.data(), &sz)) {
       buf.resize(sz);
       CloseHandle(h);
@@ -96,7 +96,7 @@ std::optional<std::wstring> Utils::full_image_path_from_pid(DWORD pid) {
   // Fallback: PSAPI device-style path
   h = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
   if (h) {
-    if (wchar_t wbuf[MAX_PATH *kPsapiPathReserveMultiplier] = {0}; GetProcessImageFileNameW(h, wbuf, static_cast<DWORD>(std::size(wbuf)))) {
+    if (wchar_t wbuf[MAX_PATH *Constants::PSAPI_PATH_RESERVE_MULTIPLIER] = {0}; GetProcessImageFileNameW(h, wbuf, static_cast<DWORD>(std::size(wbuf)))) {
       CloseHandle(h);
       return device_to_dos_path(wbuf);
     }
@@ -122,15 +122,44 @@ std::string Utils::wstring_to_utf8(const std::wstring &w) {
   if (w.empty()) {
     return {};
   }
-  int sz = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), static_cast<int>(w.size()),
+  int sz = WideCharToMultiByte(CP_UTF8, 0, w.data(), static_cast<int>(w.size()),
                                nullptr, 0, nullptr, nullptr);
   if (sz <= 0) {
     return {};
   }
   std::string out(static_cast<size_t>(sz), '\0');
-  WideCharToMultiByte(CP_UTF8, 0, w.c_str(), static_cast<int>(w.size()),
+  WideCharToMultiByte(CP_UTF8, 0, w.data(), static_cast<int>(w.size()),
                       out.data(), sz, nullptr, nullptr);
   return out;
+}
+
+std::string Utils::wstring_to_utf8(const wchar_t *w) {
+  if (!w || *w == L'\0') {
+    return {};
+  }
+  return wstring_to_utf8(std::wstring(w));
+}
+
+std::wstring Utils::utf8_to_wstring(const std::string &s) {
+  if (s.empty()) {
+    return {};
+  }
+  int sz = MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()),
+                               nullptr, 0);
+  if (sz <= 0) {
+    return {};
+  }
+  std::wstring out(static_cast<size_t>(sz), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()),
+                      out.data(), sz);
+  return out;
+}
+
+std::wstring Utils::utf8_to_wstring(const char *s) {
+  if (!s || *s == '\0') {
+    return {};
+  }
+  return utf8_to_wstring(std::string(s));
 }
 
 std::string Utils::computeSHA256(const std::string &path) {
@@ -142,7 +171,7 @@ std::string Utils::computeSHA256(const std::string &path) {
   auto hasher = Botan::HashFunction::create_or_throw("SHA-256");
   std::vector<uint8_t> buf(Constants::SHA256_BUFFER_SIZE);
   while (file) {
-    file.read(reinterpret_cast<char *>(buf.data()), buf.size());
+    file.read(reinterpret_cast<char *>(buf.data()), static_cast<std::streamsize>(buf.size()));
     std::streamsize bytesRead = file.gcount();
     if (bytesRead > 0) {
       hasher->update(buf.data(), static_cast<size_t>(bytesRead));
@@ -173,15 +202,10 @@ double Utils::calculateEntropy(const std::vector<int> &countedBytes, std::stream
 }
 
 bool Utils::isWindowsSigned(const std::string &path) {
-  // Convert UTF-8 path to wide string
-  int sz = MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, nullptr, 0);
-  if (sz <= 0) {
+  std::wstring wpath = utf8_to_wstring(path);
+  if (wpath.empty()) {
     return false;
   }
-
-  std::wstring wpath(static_cast<size_t>(sz), L'\0');
-  MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, wpath.data(), sz);
-  wpath.resize(sz - 1); // Remove null terminator from size
 
   // Set up WinTrust file info structure
   WINTRUST_FILE_INFO fileInfo = {};
@@ -217,4 +241,42 @@ bool Utils::isWindowsSigned(const std::string &path) {
 
   // Return true only if the signature is valid and trusted
   return status == ERROR_SUCCESS;
+}
+
+bool Utils::quarantineFile(const std::string &path) {
+  try {
+    std::filesystem::path src(path);
+    if (!std::filesystem::exists(src)) {
+      return false;
+    }
+
+    std::filesystem::path quarantineDir =
+        std::filesystem::current_path() / Constants::QUARANTINE_DIR_NAME;
+    if (!std::filesystem::exists(quarantineDir)) {
+      std::filesystem::create_directories(quarantineDir);
+    }
+
+    const std::string quarantineExt(Constants::QUARANTINE_EXTENSION);
+    std::string stem = src.stem().string();
+    std::filesystem::path dest = quarantineDir / (stem + quarantineExt);
+
+    // If destination exists, append a unique ID or timestamp
+    if (std::filesystem::exists(dest)) {
+      dest = quarantineDir /
+             (stem + "_" + std::to_string(GetTickCount()) + quarantineExt);
+    }
+
+    std::filesystem::rename(src, dest);
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+bool Utils::deleteFile(const std::string &path) {
+  try {
+    return std::filesystem::remove(path);
+  } catch (...) {
+    return false;
+  }
 }

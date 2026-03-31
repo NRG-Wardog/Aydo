@@ -17,8 +17,32 @@
 #include "../Constants.hpp"
 
 #include "Generic.hpp"
+#include "SandboxRuntimeConfig.hpp"
 
 namespace Utils::ScanProcessingCron {
+struct SigmaQuery {
+  std::string query;
+  std::string level;
+};
+
+int levelToScore(const std::string &level) {
+  if (level == "critical") {
+    return 100;
+  }
+  if (level == "high") {
+    return 75;
+  }
+  if (level == "medium") {
+    return 25;
+  }
+  if (level == "low") {
+    return 5;
+  }
+  if (level == "informational") {
+    return 1;
+  }
+  return 0;
+}
 
 std::optional<std::filesystem::path> resolveSigmaQueriesPath() {
   for (const auto *candidate : Constants::SIGMA_QUERY_PATHS) {
@@ -43,8 +67,8 @@ std::string buildExistsQuery(const std::string &rawQuery) {
   return oss.str();
 }
 
-const std::vector<std::string> &getSigmaQueries(bool &loadedSuccessfully) {
-  static std::vector<std::string> queries;
+const std::vector<SigmaQuery> &getSigmaQueries(bool &loadedSuccessfully) {
+  static std::vector<SigmaQuery> queries;
   static bool loaded = false;
   static std::once_flag once;
 
@@ -77,8 +101,14 @@ const std::vector<std::string> &getSigmaQueries(bool &loadedSuccessfully) {
 
     queries.reserve(root.size());
     for (const auto &entry : root) {
-      if (entry.isString()) {
-        queries.emplace_back(entry.asString());
+      if (entry.isObject()) {
+        std::string query = entry.get("query", "").asString();
+        std::string level = entry.get("level", "unknown").asString();
+        if (!query.empty()) {
+          queries.push_back({query, level});
+        }
+      } else if (entry.isString()) {
+        queries.push_back({entry.asString(), "unknown"});
       }
     }
 
@@ -94,6 +124,14 @@ const std::vector<std::string> &getSigmaQueries(bool &loadedSuccessfully) {
 DynamicScanOutcome runDynamicScan(const Models::Scan &scan) {
   LOG_DEBUG << "[DynamicScan] Scanning fileHash=" << scan.getFileHash();
 
+  const auto sandboxConfigResult =
+      Utils::SandboxRuntimeConfig::load(drogon::app().getCustomConfig());
+  if (!sandboxConfigResult) {
+    LOG_ERROR << "Sandbox config error while processing dynamic scan: "
+              << sandboxConfigResult.error;
+    return {Models::ScanStatus::Failed, Models::VirusType::Unknown, 0};
+  }
+
   bool queriesLoaded = false;
   const auto &queries = getSigmaQueries(queriesLoaded);
   if (!queriesLoaded || queries.empty()) {
@@ -101,10 +139,8 @@ DynamicScanOutcome runDynamicScan(const Models::Scan &scan) {
     return {Models::ScanStatus::Failed, Models::VirusType::Unknown, 0};
   }
 
-  // <SANDBOXES_DIRECTORY_PATH>/<fileHash>/shared/log.sqlite
-  const std::filesystem::path logDbPath = 
-      std::filesystem::path(Constants::SANDBOXES_DIRECTORY_PATH) / 
-      scan.getFileHash() / "shared" / "log.sqlite";
+  const std::filesystem::path logDbPath =
+      sandboxConfigResult.config->sharedLogDbPath(scan.getFileHash());
   const std::string logDbPathStr = logDbPath.string();
 
   sqlite3 *db = nullptr;
@@ -122,8 +158,11 @@ DynamicScanOutcome runDynamicScan(const Models::Scan &scan) {
   sqlite3_busy_timeout(db, BUSY_TIMEOUT_MS);
   sqlite3_exec(db, "PRAGMA query_only = ON;", nullptr, nullptr, nullptr);
 
-  for (const auto &query : queries) {
-    const auto existsQuery = buildExistsQuery(query);
+  int maxScore = 0;
+  bool anyMatch = false;
+
+  for (const auto &sigma : queries) {
+    const auto existsQuery = buildExistsQuery(sigma.query);
     if (existsQuery.empty()) {
       continue;
     }
@@ -145,14 +184,28 @@ DynamicScanOutcome runDynamicScan(const Models::Scan &scan) {
     sqlite3_finalize(stmt);
 
     if (matched) {
-      LOG_INFO << "Sigma match found for fileHash=" << scan.getFileHash();
-      sqlite3_close(db);
-      // TODO: Work on the dynamic scan so the score and virus type will be more "accurate"
-      return {Models::ScanStatus::Completed, Models::VirusType::Unknown, 99};
+      anyMatch = true;
+      int currentScore = levelToScore(sigma.level);
+      if (currentScore > maxScore) {
+        maxScore = currentScore;
+      }
+
+      LOG_INFO << "Sigma match found for fileHash=" << scan.getFileHash()
+               << " level=" << sigma.level << " score=" << currentScore;
+
+      // If we find a critical hit, we can stop early
+      if (maxScore >= 100) {
+        break;
+      }
     }
   }
 
   sqlite3_close(db);
+
+  if (anyMatch) {
+    return {Models::ScanStatus::Completed, Models::VirusType::Unknown, maxScore};
+  }
+
   return {Models::ScanStatus::Completed, Models::VirusType::Clean, 0};
 }
 

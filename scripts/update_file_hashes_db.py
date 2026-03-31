@@ -1,5 +1,3 @@
-import tqdm
-import requests
 import zipfile
 import csv
 import sqlite3
@@ -7,7 +5,10 @@ import argparse
 import os
 
 CSV_FILE_HASHES_URL = "https://bazaar.abuse.ch/export/csv/full/"
-OUTPUT_FILE_NAME = "../data/file_hashes"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(SCRIPT_DIR)
+DATA_DIR = os.path.join(REPO_ROOT, "data")
+OUTPUT_FILE_NAME = os.path.join(DATA_DIR, "file_hashes")
 CSV_HASH_INDEX = 1
 CSV_SIGNATURE_INDEX = 8
 RENAME_FILES = {
@@ -40,8 +41,10 @@ def remove_files(database_file: str, csv_file:str) -> None:
 
 def download_database_from_url(url: str, output_file: str) -> None:
     """Download the CSV database from the specified URL"""
+    import requests
 
     print(f"Downloading database from {url}...")
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
     response = requests.get(url)
     response.raise_for_status()
     
@@ -77,6 +80,7 @@ def parse_csv_to_sqlite(csv_file: str, db_file: str) -> None:
     print("Parsing CSV and creating SQLite database...")
     
     # Create SQLite database and table
+    os.makedirs(os.path.dirname(db_file), exist_ok=True)
     conn = sqlite3.connect(db_file)
     cursor = conn.cursor()
     
@@ -86,10 +90,16 @@ def parse_csv_to_sqlite(csv_file: str, db_file: str) -> None:
                       (hash TEXT PRIMARY KEY, name TEXT)''')
     
     try:
+        try:
+            import tqdm
+            progress_iter = tqdm.tqdm
+        except ImportError:
+            progress_iter = lambda rows: rows
+
         with open(csv_file, 'r', encoding='utf-8') as csvfile:
             csv_reader = csv.reader(csvfile)
             
-            for row in tqdm.tqdm(csv_reader):
+            for row in progress_iter(csv_reader):
                 # If the first value is a comment, skip it
                 if row[0].startswith(CSV_COMMENT):
                     continue

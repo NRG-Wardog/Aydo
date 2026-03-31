@@ -40,8 +40,9 @@ SearchResult SCAScanningEngine::scanMemory(const std::vector<uint8_t> &data) {
     return std::nullopt;
   }
 
-  auto start = result[0].first;
-  auto end = result[0].second;
+  const auto &firstMatch = result[0];
+  const char *begin = reinterpret_cast<const char *>(data.data() + firstMatch.startPos);
+  const size_t length = firstMatch.endPos - firstMatch.startPos + 1;
 
-  return std::string(data.data() + start, data.data() + end);
+  return std::string(begin, begin + length);
 }

@@ -41,13 +41,11 @@ nlohmann::json extractFile(const nlohmann::json &props,
 typedef BOOL(WINAPI *IsWow64Process2_t)(HANDLE, USHORT *, USHORT *);
 int resolveBitness(HANDLE h);
 std::string narrow_utf8(const std::wstring &w);
-
 nlohmann::json bestEffortProcFromPid(DWORD pid);
-
 nlohmann::json normUintOrNull(ULONG v);
-
 unsigned long long ts100nsFromLargeInteger(const LARGE_INTEGER &ts);
 std::string getHostName();
 std::string iso8601FromLargeIntegerTimestamp(const LARGE_INTEGER &ts);
+std::string iso8601FromTimePoint(std::chrono::system_clock::time_point tp);
 std::string guidToString(const GUID &g);
 } // namespace Utils

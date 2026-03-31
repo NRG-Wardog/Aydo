@@ -42,7 +42,8 @@ ACUtils::PatternInfo ACUtils::parsePattern(const std::string &patternStr) {
 
     // Check for * constraint
     size_t anyAmountOfBytesPos = patternStr.find(constraintToString(Constraint::ANY_AMOUNT_OF_BYTES), pos);
-    if (anyAmountOfBytesPos != std::string::npos) {
+    if (anyAmountOfBytesPos != std::string::npos &&
+        (constraintPos == std::string::npos || anyAmountOfBytesPos < constraintPos)) {
       constraintPos = anyAmountOfBytesPos;
       constraintType = Constraint::ANY_AMOUNT_OF_BYTES;
     }
@@ -90,16 +91,13 @@ ACUtils::PatternInfo ACUtils::parsePattern(const std::string &patternStr) {
 
 // Helper: process Aho-Corasick matches and record start positions with base offset
 void ACUtils::processMatchesAndRecordPositions(
-    const std::vector<std::pair<size_t, size_t>> &matches,
+    const std::vector<AhoCorasick::Match> &matches,
     const std::vector<std::vector<uint8_t>> &allSegments,
     size_t baseOffset,
     SegmentPositions &segmentPositions) {
   for (const auto &match : matches) {
-    size_t patternIndex = match.first;
-    size_t matchEndPos = match.second;
-
-    const auto &segment = allSegments[patternIndex];
-    size_t startPos = baseOffset + matchEndPos - segment.size();
+    const auto &segment = allSegments[match.patternIndex];
+    size_t startPos = baseOffset + match.startPos;
 
     segmentPositions[segment].push_back(startPos);
   }

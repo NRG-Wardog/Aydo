@@ -1,12 +1,25 @@
 #include "Constants.hpp"
 
 #include <cstdlib>
+#include <limits>
 
 std::string getEnvOrDefault(const char *name, std::string_view def) {
   if (const char *v = std::getenv(name)) {
     return std::string(v);
   }
   return std::string(def);
+}
+
+static unsigned int getEnvUIntOrDefault(const char *name, unsigned int def) {
+  if (const char *v = std::getenv(name)) {
+    char *end = nullptr;
+    const unsigned long parsed = std::strtoul(v, &end, 10);
+    if (end != v && *end == '\0' &&
+        parsed <= std::numeric_limits<unsigned int>::max()) {
+      return static_cast<unsigned int>(parsed);
+    }
+  }
+  return def;
 }
 
 const std::string VM_RUN_PATH =
@@ -17,6 +30,9 @@ const std::string ANALYSIS_VM_PATH =
 
 const std::string SANDBOXES_DIRECTORY_PATH =
     getEnvOrDefault("SANDBOXES_DIRECTORY_PATH", R"(D:\veeeertoooaaalll\)");
+
+const std::string VM_START_MODE =
+    getEnvOrDefault("VM_START_MODE", "nogui");
 
 const std::string PM_FILE_PATH_GUEST =
     getEnvOrDefault("PM_FILE_PATH_GUEST",
@@ -60,8 +76,17 @@ const std::string PROCCES_RUNNER_FILE_PATH =
 
 const std::string SUSPICIOUS_FILE_NAME_GUEST =
     getEnvOrDefault("SUSPICIOUS_FILE_NAME_GUEST",
-                    "filetoplot.exe");\
+                    "filetoplot.exe");
 
 const std::string SUSPICIOUS_WORKDIR_GUEST =
     getEnvOrDefault("SUSPICIOUS_WORKDIR_GUEST",
                     R"(C:\Users\KAN12\Desktop\checks)");
+
+const unsigned int VM_TOOLS_MAX_RETRIES =
+    getEnvUIntOrDefault("VM_TOOLS_MAX_RETRIES", 60);
+
+const unsigned int VM_TOOLS_SLEEP_MS =
+    getEnvUIntOrDefault("VM_TOOLS_SLEEP_MS", 5000);
+
+const unsigned int VM_SHUTDOWN_GRACE_MS =
+    getEnvUIntOrDefault("VM_SHUTDOWN_GRACE_MS", 5000);

@@ -1,3 +1,7 @@
+#include <iostream>
+#include <string>
+#include <string_view>
+
 #include <drogon/HttpAppFramework.h>
 #include <trantor/utils/Logger.h>
 
@@ -5,8 +9,21 @@
 #include "Controllers/Auth.hpp"
 #include "Controllers/Sandbox.hpp"
 #include "DatabaseSetup.hpp"
+#include "Utils/SandboxRuntimeConfig.hpp"
 
-int main() {
+int main(int argc, char *argv[]) {
+  if (argc == 2 && std::string_view(argv[1]) == "--self-test") {
+    std::string failure;
+    if (Utils::SandboxRuntimeConfig::runSelfTests(&failure)) {
+      std::cout << "[self-test] PASS sandbox_runtime_config" << std::endl;
+      return EXIT_SUCCESS;
+    }
+
+    std::cerr << "[self-test] FAIL sandbox_runtime_config: " << failure
+              << std::endl;
+    return EXIT_FAILURE;
+  }
+
   // Setup the server
   drogon::app()
       .loadConfigFile(std::string(Constants::CONFIG_FILE));

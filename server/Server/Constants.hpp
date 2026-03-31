@@ -24,12 +24,15 @@ constexpr std::string_view UPLOADS_DIRECTORY = "uploads";
 constexpr std::string_view MAX_UPLOAD_BYTES_KEY = "maxUploadBytes";
 
 // VMRunner
-constexpr std::string_view VMRUNNER_PATH = R"(C:\Dev\Magshii\Project\BBBBBBBBB\aydo\x64\Release\VMRunner.exe)";
+constexpr std::string_view VMRUNNER_PATH = R"(C:\Dev\Magshii\Project\DDDDDDDD\aydo\x64\Release\VMRunner.exe)";
 constexpr std::string_view SANDBOXES_DIRECTORY_PATH = R"(D:\veeeertoooaaalll)";
 
 constexpr double DEFAULT_SCAN_CHECK_INTERVAL_S = 5.0;
 
 inline constexpr std::array<const char *, 1> SIGMA_QUERY_PATHS = {
-    R"(C:\Dev\Magshii\Project\BBBBBBBBB\aydo\data\sigma_queries.json)",
+    R"(C:\Dev\Magshii\Project\DDDDDDDD\aydo\data\sigma_queries.json)",
 };
+
+constexpr int RETRY_SCAN_IF_FAILED_SECONDS = 300;
+
 } // namespace Constants

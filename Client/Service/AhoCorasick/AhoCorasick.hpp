@@ -1,7 +1,7 @@
 #pragma once
 
-#include <botan/hex.h>
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include "ACNode.hpp"
@@ -13,7 +13,11 @@ private:
   bool m_quitOnFirstMatch;
 
 public:
-  using Match = std::pair<size_t, size_t>;
+  struct Match {
+    size_t patternIndex;
+    size_t startPos;
+    size_t endPos;
+  };
 
   explicit AhoCorasick(const std::vector<std::vector<uint8_t>> &patterns, bool quitOnFirstMatch = false);
 

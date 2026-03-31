@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <ios>
+#include <memory>
 
 extern "C" {
 #include "yara_x.h"
@@ -134,43 +135,50 @@ std::vector<std::string> YScanningEngine::_scanFileInternal(const std::string &f
 
   MatchCollector collector;
 
-  for (size_t ruleSetIdx = 0; ruleSetIdx < m_rulesSets.size(); ++ruleSetIdx) {
-    const auto &rules_ptr = m_rulesSets[ruleSetIdx];
+  using ScannerPtr = std::unique_ptr<YRX_SCANNER, decltype(&yrx_scanner_destroy)>;
+  std::vector<ScannerPtr> scanners;
+  scanners.reserve(m_rulesSets.size());
 
+  for (const auto &rules_ptr : m_rulesSets) {
     if (!rules_ptr) {
       continue;
     }
 
-    YRX_SCANNER *scanner = nullptr;
-    if (yrx_scanner_create(rules_ptr.get(), &scanner) != YRX_SUCCESS || !scanner) {
+    YRX_SCANNER *scanner_raw = nullptr;
+    if (yrx_scanner_create(rules_ptr.get(), &scanner_raw) != YRX_SUCCESS || !scanner_raw) {
       throw Errors::FailedToLoadCompiledRulesException("yrx_scanner_create failed");
     }
 
-    if (yrx_scanner_on_matching_rule(scanner, _onMatchingRuleCallback, &collector) != YRX_SUCCESS) {
-      yrx_scanner_destroy(scanner);
+    ScannerPtr scanner(scanner_raw, yrx_scanner_destroy);
+    if (yrx_scanner_on_matching_rule(scanner.get(), _onMatchingRuleCallback, &collector) != YRX_SUCCESS) {
       throw Errors::FailedToLoadCompiledRulesException("yrx_scanner_on_matching_rule failed");
     }
 
-    ifs.clear();
-    ifs.seekg(0, std::ios::beg);
-    std::vector<uint8_t> chunk(Constants::YARA_CHUNK_SIZE);
+    scanners.push_back(std::move(scanner));
+  }
 
-    while (ifs) {
-      ifs.read(reinterpret_cast<char *>(chunk.data()), Constants::YARA_CHUNK_SIZE);
-      std::streamsize bytes_read = ifs.gcount();
+  if (scanners.empty()) {
+    throw Errors::NoPatternsProvidedException();
+  }
 
-      if (bytes_read > 0) {
-        enum YRX_RESULT r = yrx_scanner_scan(scanner, chunk.data(), static_cast<size_t>(bytes_read));
-        if (r != YRX_SUCCESS) {
-          const char *err = yrx_last_error();
-          std::string emsg = err ? err : "yrx_scanner_scan failed";
-          yrx_scanner_destroy(scanner);
-          throw Errors::FailedToLoadCompiledRulesException("Scan failed: " + emsg);
-        }
-      }
+  std::vector<uint8_t> chunk(Constants::YARA_CHUNK_SIZE);
+
+  while (ifs) {
+    ifs.read(reinterpret_cast<char *>(chunk.data()), Constants::YARA_CHUNK_SIZE);
+    const std::streamsize bytes_read = ifs.gcount();
+
+    if (bytes_read <= 0) {
+      break;
     }
 
-    yrx_scanner_destroy(scanner);
+    for (auto &scanner : scanners) {
+      const enum YRX_RESULT r = yrx_scanner_scan(scanner.get(), chunk.data(), static_cast<size_t>(bytes_read));
+      if (r != YRX_SUCCESS) {
+        const char *err = yrx_last_error();
+        const std::string emsg = err ? err : "yrx_scanner_scan failed";
+        throw Errors::FailedToLoadCompiledRulesException("Scan failed: " + emsg);
+      }
+    }
   }
 
   return collector.matches;

@@ -13,12 +13,40 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "Constants.hpp"
 #include "LogName.hpp"
 
 namespace Utills {
+
+namespace {
+
+std::string trimCopy(std::string value) {
+  const auto isNotSpace = [](unsigned char ch) {
+    return !std::isspace(ch);
+  };
+  const auto first = std::find_if(value.begin(), value.end(), isNotSpace);
+  if (first == value.end()) {
+    return {};
+  }
+  const auto last =
+      std::find_if(value.rbegin(), value.rend(), isNotSpace).base();
+  return std::string(first, last);
+}
+
+std::string singleLineForLog(std::string value, size_t maxLen = 320) {
+  std::replace(value.begin(), value.end(), '\r', ' ');
+  std::replace(value.begin(), value.end(), '\n', ' ');
+  value = trimCopy(std::move(value));
+  if (value.size() <= maxLen) {
+    return value;
+  }
+  return value.substr(0, maxLen) + "...";
+}
+
+} // namespace
 
 void printBanner(bool isClosing) {
   std::string bannerStr(BANNER);
@@ -62,7 +90,8 @@ static void readPipeToString(HANDLE hPipe, std::string &out) {
 int executeAndWaitRC(const std::string &cmdUtf8,
                      std::string *out,
                      std::string *err,
-                     std::chrono::milliseconds timeout) {
+                     std::chrono::milliseconds timeout,
+                     bool echoOutput) {
   SECURITY_ATTRIBUTES sa{};
   sa.nLength = sizeof(sa);
   sa.bInheritHandle = TRUE;
@@ -149,10 +178,12 @@ int executeAndWaitRC(const std::string &cmdUtf8,
   tOut.join();
   tErr.join();
 
-  if (!outBuf.empty())
-    std::cout << outBuf;
-  if (!errBuf.empty())
-    std::cerr << errBuf;
+  if (echoOutput) {
+    if (!outBuf.empty())
+      std::cout << outBuf;
+    if (!errBuf.empty())
+      std::cerr << errBuf;
+  }
 
   if (out)
     *out = std::move(outBuf);
@@ -171,72 +202,42 @@ bool waitForTools(const std::string &vmRunPath,
                   const std::string &sandboxPath,
                   int maxRetries,
                   int sleepMs) {
-  auto ensureQuotedLocal = [](const std::string &s) {
-    if (!s.empty() && s.front() == '"' && s.back() == '"') {
-      return s;
-    }
-    return std::string("\"") + s + "\"";
-  };
-  auto squashDoubleSlashes = [](std::string s) {
-    for (size_t i = 1; i < s.size(); ++i) {
-      if (s[i] == '\\' && s[i - 1] == '\\')
-        s.erase(i--, 1);
-    }
-
-    return s;
-  };
-
-  const std::string vmrun = dequote(vmRunPath);
-  std::string vmx = squashDoubleSlashes(dequote(sandboxPath));
-  std::string full = std::string("\"") + vmrun + "\" -T ws checkToolsState " + ensureQuotedLocal(vmx);
+  const std::string vmrun = winQuote(dequote(vmRunPath));
+  const std::string vmx = winQuote(dequote(sandboxPath));
+  const std::string full =
+      std::format(R"({} -T ws checkToolsState {})", vmrun, vmx);
 
   for (int i = 0; i < maxRetries; ++i) {
-    SECURITY_ATTRIBUTES sa{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
-    HANDLE hRead = nullptr;
-    HANDLE hWrite = nullptr;
-    CreatePipe(&hRead, &hWrite, &sa, 0);
-    SetHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0);
-
-    STARTUPINFOA si{};
-    si.cb = sizeof(si);
-    si.dwFlags = STARTF_USESTDHANDLES;
-    si.hStdOutput = hWrite;
-    si.hStdError = hWrite;
-
-    PROCESS_INFORMATION pi{};
-    std::vector<char> cmd(full.begin(), full.end());
-    cmd.push_back('\0');
-
-    BOOL ok = CreateProcessA(nullptr, cmd.data(),
-                             nullptr, nullptr, TRUE, CREATE_NO_WINDOW,
-                             nullptr, nullptr, &si, &pi);
-
-    CloseHandle(hWrite);
-
     std::string output;
-    if (ok) {
-      char buf[BUFFER_SIZE]{};
-      DWORD n = 0;
-      while (ReadFile(hRead, buf, sizeof(buf) - 1, &n, nullptr) && n) {
-        buf[n] = '\0';
-        output += buf;
-      }
-      WaitForSingleObject(pi.hProcess, INFINITE);
-      CloseHandle(pi.hProcess);
-      CloseHandle(pi.hThread);
-    }
-    CloseHandle(hRead);
+    std::string error;
+    const int rc = executeAndWaitRC(
+        full,
+        &output,
+        &error,
+        std::chrono::seconds(15),
+        false);
 
     std::string lower = output;
+    lower += '\n';
+    lower += error;
     std::transform(lower.begin(), lower.end(), lower.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
-    if (lower.find("not running") == std::string::npos &&
+    const std::string summary = singleLineForLog(
+        output.empty() ? error : output + (error.empty() ? "" : " " + error));
+    std::cout << "    [tools] probe " << (i + 1) << '/' << maxRetries
+              << ": rc=" << rc;
+    if (!summary.empty()) {
+      std::cout << " output=" << summary;
+    }
+    std::cout << std::endl;
+
+    if (rc == 0 && lower.find("not running") == std::string::npos &&
         lower.find("running") != std::string::npos) {
       return true;
     }
 
-    Sleep(sleepMs);
+    std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
   }
   return false;
 }
@@ -245,9 +246,10 @@ int runPSInGuest(const std::string &vmRunPath,
                  const std::string &sandboxVmx,
                  std::string_view psCommand) {
   const std::string psPath = R"(C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe)";
+  const std::string quotedVmRunPath = winQuote(dequote(vmRunPath));
   const std::string cmd = std::format(
       R"({} -T ws -gu {} -gp {} runProgramInGuest {} {} -NoLogo -NoProfile -NonInteractive -Command {})",
-      vmRunPath, std::string(GUEST_USER), std::string(GUEST_PASS),
+      quotedVmRunPath, std::string(GUEST_USER), std::string(GUEST_PASS),
       sandboxVmx, ensureQuoted(psPath), psQuote(std::string(psCommand)));
   return executeAndWaitRC(cmd);
 }
@@ -261,25 +263,176 @@ bool guestPathExists(const std::string &vmRunPath,
   return runPSInGuest(vmRunPath, sandboxVmx, cmd) == 0;
 }
 
+static std::string normalizeVmPathForComparison(std::string path) {
+  path = dequote(std::move(path));
+  const auto isNotSpace = [](unsigned char ch) {
+    return !std::isspace(ch);
+  };
+  const auto first = std::find_if(path.begin(), path.end(), isNotSpace);
+  if (first == path.end()) {
+    return {};
+  }
+  const auto last =
+      std::find_if(path.rbegin(), path.rend(), isNotSpace).base();
+  path = std::string(first, last);
+  std::replace(path.begin(), path.end(), '/', '\\');
+  for (size_t i = 1; i < path.size(); ++i) {
+    if (path[i] == '\\' && path[i - 1] == '\\')
+      path.erase(i--, 1);
+  }
+  std::transform(path.begin(), path.end(), path.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return path;
+}
+
+std::string vmPowerStateToString(VmPowerState state) {
+  switch (state) {
+    case VmPowerState::Running:
+      return "Running";
+    case VmPowerState::Stopped:
+      return "Stopped";
+    case VmPowerState::Unknown:
+      return "Unknown";
+  }
+  return "Unknown";
+}
+
+VmPowerStateDetails probeVmPowerState(const std::string &vmRunPath,
+                                      const std::string &sandboxVmx) {
+  VmPowerStateDetails details;
+  details.command =
+      std::format(R"({} -T ws list)", winQuote(dequote(vmRunPath)));
+  details.rc = executeAndWaitRC(
+      details.command,
+      &details.out,
+      &details.err,
+      std::chrono::seconds(10),
+      false);
+  if (details.rc != 0) {
+    details.state = VmPowerState::Unknown;
+    return details;
+  }
+
+  const std::string expected = normalizeVmPathForComparison(sandboxVmx);
+  std::istringstream stream(details.out);
+  std::string line;
+  while (std::getline(stream, line)) {
+    if (normalizeVmPathForComparison(line) == expected) {
+      details.state = VmPowerState::Running;
+      return details;
+    }
+  }
+
+  details.state = VmPowerState::Stopped;
+  return details;
+}
+
+VmPowerState getVmPowerState(const std::string &vmRunPath,
+                             const std::string &sandboxVmx) {
+  return probeVmPowerState(vmRunPath, sandboxVmx).state;
+}
+
+bool waitForVmPowerState(const VmPowerStateProvider &provider,
+                         VmPowerState desiredState,
+                         int maxRetries,
+                         int sleepMs) {
+  for (int attempt = 0; attempt < maxRetries; ++attempt) {
+    if (provider() == desiredState) {
+      return true;
+    }
+
+    if (attempt + 1 < maxRetries) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
+    }
+  }
+
+  return provider() == desiredState;
+}
+
+bool waitForVmToStart(const std::string &vmRunPath,
+                      const std::string &sandboxVmx,
+                      int maxRetries,
+                      int sleepMs) {
+  return waitForVmPowerState(
+      [&]() { return getVmPowerState(vmRunPath, sandboxVmx); },
+      VmPowerState::Running,
+      maxRetries,
+      sleepMs);
+}
+
+static bool waitForVmToStop(const std::string &vmRunPath,
+                            const std::string &sandboxVmx,
+                            std::chrono::milliseconds timeout,
+                            std::chrono::milliseconds pollInterval =
+                                std::chrono::milliseconds(500)) {
+  const auto deadline = std::chrono::steady_clock::now() + timeout;
+  while (std::chrono::steady_clock::now() < deadline) {
+    if (getVmPowerState(vmRunPath, sandboxVmx) == VmPowerState::Stopped) {
+      return true;
+    }
+    std::this_thread::sleep_for(pollInterval);
+  }
+  return getVmPowerState(vmRunPath, sandboxVmx) == VmPowerState::Stopped;
+}
+
 bool closeVM(const std::string &vmRunPath, const std::string &sandboxVmx,
              const std::string &sandboxId) {
-  bool rs = false;
+  (void)sandboxId;
+  std::cout << "[6.1/7] Stop VM (soft)" << std::endl;
+  const std::string quotedVmRunPath = winQuote(dequote(vmRunPath));
+  const std::string softCmd =
+      std::format(R"({} -T ws stop {} soft)", quotedVmRunPath, sandboxVmx);
+  const int softRc = Utills::executeAndWaitRC(softCmd);
+  if (softRc == 0 &&
+      waitForVmToStop(
+          vmRunPath,
+          sandboxVmx,
+          std::chrono::milliseconds(VM_SHUTDOWN_GRACE_MS))) {
+    return true;
+  }
+  if (softRc != 0 &&
+      getVmPowerState(vmRunPath, sandboxVmx) == VmPowerState::Stopped) {
+    return true;
+  }
+
+  std::cout << "[6.2/7] Stop VM (hard)" << std::endl;
+  const std::string hardCmd =
+      std::format(R"({} -T ws stop {} hard)", quotedVmRunPath, sandboxVmx);
+  const int hardRc = Utills::executeAndWaitRC(hardCmd);
+  if (hardRc != 0 &&
+      getVmPowerState(vmRunPath, sandboxVmx) != VmPowerState::Stopped) {
+    return false;
+  }
+
+  return waitForVmToStop(
+      vmRunPath,
+      sandboxVmx,
+      std::chrono::milliseconds(VM_SHUTDOWN_GRACE_MS));
+}
+
+bool closeVMWithExecutor(const std::string &vmRunPath,
+                         const std::string &sandboxVmx,
+                         const CommandExecutor &executor,
+                         std::chrono::seconds fallbackDelay) {
   std::cout << "[6.1/7] Stop VM (soft)" << std::endl;
   {
-    const std::string cmd =
+    const std::string softCmd =
         std::format(R"({} -T ws stop {} soft)", vmRunPath, sandboxVmx);
-    rs = Utills::executeAndWaitRC(cmd);
-    std::this_thread::sleep_for(std::chrono::seconds(STEPS_INTERVAL_S));
+    if (executor(softCmd) == 0) {
+      return true;
+    }
+  }
+
+  if (fallbackDelay > std::chrono::seconds::zero()) {
+    std::this_thread::sleep_for(fallbackDelay);
   }
 
   std::cout << "[6.2/7] Stop VM (hard)" << std::endl;
   {
-    const std::string cmd =
+    const std::string hardCmd =
         std::format(R"({} -T ws stop {} hard)", vmRunPath, sandboxVmx);
-    rs = rs || Utills::executeAndWaitRC(cmd);
+    return executor(hardCmd) == 0;
   }
-
-  return rs;
 }
 
 std::string ensureQuoted(const std::string &s) {

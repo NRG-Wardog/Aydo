@@ -3,7 +3,9 @@
 #include "Communications.hpp"
 #include "Constants.hpp"
 #include "Logger.hpp"
+#include "ServiceProtection.hpp"
 #include "Utils.hpp"
+#include "ntifs.h"
 
 extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath);
 VOID DriverUnload(PDRIVER_OBJECT DriverObject);
@@ -21,7 +23,6 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING Reg
   RtlInitUnicodeString(&deviceName, Constants::DEVICE_NAME);
   RtlInitUnicodeString(&symlinkName, Constants::SYMLINK_NAME);
 
-  // Create device object
   status = IoCreateDevice(
       DriverObject,
       0,
@@ -30,39 +31,37 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING Reg
       FILE_DEVICE_SECURE_OPEN,
       FALSE,
       &DeviceObject);
+  CHECK_NT_RETURN(status, "Failed to create device object (0x%X)", status);
 
-  if (!NT_SUCCESS(status)) {
-    LOG_ERROR("Failed to create device object, status: 0x%X", status);
-
-    return status;
-  }
-
-  // Create symbolic link
   status = IoCreateSymbolicLink(&symlinkName, &deviceName);
-  if (!NT_SUCCESS(status)) {
-    LOG_ERROR("Failed to create symbolic link, status: 0x%X", status);
-    IoDeleteDevice(DeviceObject);
+  CHECK_NT_RETURN_CLEANUP(status, IoDeleteDevice(DeviceObject), "Failed to create symbolic link (0x%X)", status);
 
-    return status;
-  }
-
-  // Set IRP handlers
   DriverObject->MajorFunction[IRP_MJ_CREATE] = CreateClose;
   DriverObject->MajorFunction[IRP_MJ_CLOSE] = CreateClose;
   DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = Communications::handleDeviceControl;
 
-  // Initialize process notifications
-  status = Utils::initializeProcessNotifications();
-  if (!NT_SUCCESS(status)) {
-    LOG_ERROR("Failed to initialize process notifications, status: 0x%X", status);
-    IoDeleteSymbolicLink(&symlinkName);
-    IoDeleteDevice(DeviceObject);
+  status = ServiceProtection::registerProcessProtection();
+  CHECK_NT_RETURN_CLEANUP(status,
+      (IoDeleteSymbolicLink(&symlinkName), IoDeleteDevice(DeviceObject)),
+      "Failed to register process protection (0x%X)", status);
 
-    return status;
-  }
+  LOG_INFO("Setup process protection (not ready yet)");
+
+  status = ServiceProtection::registerRegistryProtection(DriverObject);
+  CHECK_NT_RETURN_CLEANUP(status,
+      (ServiceProtection::unregisterProcessProtection(), IoDeleteSymbolicLink(&symlinkName), IoDeleteDevice(DeviceObject)),
+      "Failed to register registry protection (0x%X)", status);
+
+  LOG_INFO("Setup registry protection");
+
+  status = Utils::initializeProcessNotifications();
+  CHECK_NT_RETURN_CLEANUP(status,
+      (ServiceProtection::unregisterRegistryProtection(), ServiceProtection::unregisterProcessProtection(),
+       IoDeleteSymbolicLink(&symlinkName), IoDeleteDevice(DeviceObject)),
+      "Failed to initialize process notifications (0x%X)", status);
 
   // Only allow unloading in debug mode
-#if defined(DBG) || true // TODO: remove this
+#if defined(DBG) // TODO: remove this
   DriverObject->DriverUnload = DriverUnload;
   LOG_INFO("Driver loaded successfully (debug mode - unloading allowed)");
 #else
@@ -77,6 +76,10 @@ VOID DriverUnload(PDRIVER_OBJECT DriverObject) {
   UNICODE_STRING symlinkName;
 
   LOG_INFO("Unloading driver...");
+
+  // Cleanup service protection callbacks first
+  ServiceProtection::unregisterProcessProtection();
+  ServiceProtection::unregisterRegistryProtection();
 
   // Cleanup process notifications
   Utils::cleanupProcessNotifications();

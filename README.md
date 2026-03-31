@@ -15,6 +15,8 @@ Remember to change the following constants in the config.json file:
 
 To your own constants!
 
+Use [server/Server/config.example.json](server/Server/config.example.json) as the reference for the latest server config shape. The live file still needs machine-specific paths, credentials, and database values.
+
 
 ### Standard error message
 
@@ -96,13 +98,40 @@ VMRunner is a simple tool that allows you to run a virtual machine in a sandbox 
 
 ### Note about the VMRunner
 
-Remember to change the following constants in the VMRunner.cpp file:
+Do not edit source constants per machine.
 
-- VM_RUN_PATH
-- ANALYSIS_VM_PATH
-- SANDBOXES_DIRECTORY_PATH
+Configure the sandbox runtime in [server/Server/config.json](server/Server/config.json) under `custom_config.sandbox`. Dynamic scanning now reads the VMware paths, guest credentials, shared-folder settings, and timeout values from that config and passes them into `VMRunner.exe` at launch.
 
-To your own constants!
+An up-to-date example is available at [server/Server/config.example.json](server/Server/config.example.json).
+
+The required keys are:
+
+- `vmRunnerPath`
+- `vmRunPath`
+- `analysisVmPath`
+- `sandboxesDirectoryPath`
+- `vmStartMode`
+- `guestUser`
+- `guestPass`
+- `guestSharedDir`
+- `shareFileName`
+- `pmHostPath`
+- `pmGuestPath`
+- `dllInjectorHostPath`
+- `dllInjectorGuestPath`
+- `processRunnerHostPath`
+- `processRunnerGuestPath`
+- `suspiciousWorkdirGuest`
+- `vmPowerOnMaxRetries`
+- `vmPowerOnSleepMs`
+- `vmToolsMaxRetries`
+- `vmToolsSleepMs`
+- `vmShutdownGraceMs`
+
+Validation commands:
+
+- `VMRunner.exe --self-test` checks VM shutdown/startup sequencing and shared-folder error handling.
+- `Server.exe --self-test` checks sandbox config parsing and sandbox log path resolution.
 
 ## Data
 
@@ -158,3 +187,7 @@ Also, you have to download [clamav](https://github.com/Cisco-Talos/clamav) to ex
 ## License
 
 MIT
+
+## Desktop App (Electron)
+
+The desktop console lives in `apps/desktop`. See `apps/desktop/README.md` for Bun-only run, build, and packaging instructions.

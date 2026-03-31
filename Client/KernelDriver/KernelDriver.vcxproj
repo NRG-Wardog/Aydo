@@ -26,6 +26,7 @@
     <Configuration>Debug</Configuration>
     <Platform Condition="'$(Platform)' == ''">x64</Platform>
     <RootNamespace>KernelDriver</RootNamespace>
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -123,12 +124,14 @@
     <ClCompile Include="Driver.cpp" />
     <ClCompile Include="Hooks.cpp" />
     <ClCompile Include="Logger.cpp" />
+    <ClCompile Include="ServiceProtection.cpp" />
     <ClCompile Include="Utils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Communications.hpp" />
     <ClInclude Include="Constants.hpp" />
     <ClInclude Include="Logger.hpp" />
+    <ClInclude Include="ServiceProtection.hpp" />
     <ClInclude Include="Utils.hpp" />
     <ClInclude Include="Validation.hpp" />
   </ItemGroup>

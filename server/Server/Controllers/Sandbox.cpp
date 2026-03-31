@@ -14,7 +14,6 @@
 #include "../Utils/Validation.hpp"
 #include "../Utils/VmRunner.hpp"
 
-
 namespace fs = std::filesystem;
 
 void API::Sandbox::_requestFileScan(
@@ -48,15 +47,39 @@ void API::Sandbox::_requestFileScan(
     auto existingScan = Models::Scan::getByFileHash(dbClient, *fileHash);
 
     if (existingScan.has_value()) {
-      // Return existing scan status
-      Json::Value resp;
-      resp["message"] = "Scan found";
-      resp["status"] = Models::Scan::statusToString(existingScan->getStatus());
-      resp["virusType"] = Models::Scan::virusTypeToString(existingScan->getVirusType());
-      resp["runtime"] = existingScan->getRuntime();
-      resp["score"] = existingScan->getScore();
+      bool shouldRetry = false;
+      if (existingScan->getStatus() == Models::ScanStatus::Failed) {
+        auto now = trantor::Date::now();
+        auto lastUpdated = existingScan->getUpdatedAt();
+        if (now.secondsSinceEpoch() - lastUpdated.secondsSinceEpoch() >= Constants::RETRY_SCAN_IF_FAILED_SECONDS) {
+          shouldRetry = true;
+        }
+      }
 
-      return callback(jsonOk(resp));
+      if (!shouldRetry) {
+        // Return existing scan status
+        Json::Value resp;
+        resp["message"] = "Scan found";
+        resp["status"] = Models::Scan::statusToString(existingScan->getStatus());
+        resp["virusType"] =
+            Models::Scan::virusTypeToString(existingScan->getVirusType());
+        resp["runtime"] = existingScan->getRuntime();
+        resp["score"] = existingScan->getScore();
+
+        return callback(jsonOk(resp));
+      }
+
+      // If shouldRetry is true, we update the existing scan to Pending
+      Models::Scan::resetScan(dbClient, *fileHash, std::stoi(*runtime));
+      Json::Value resp;
+      resp["message"] = "Scan retrying";
+      resp["status"] = Models::Scan::statusToString(Models::ScanStatus::Pending);
+      resp["virusType"] =
+          Models::Scan::virusTypeToString(Models::VirusType::Clean);
+      resp["runtime"] = std::stoi(*runtime);
+      resp["score"] = 0;
+
+      return callback(jsonOk(resp, drogon::HttpStatusCode::k201Created));
     }
 
     // Create new scan

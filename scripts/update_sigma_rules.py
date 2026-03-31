@@ -2,21 +2,16 @@ import zipfile
 import os
 import json
 import glob
-import requests
 import argparse
-
-from sigma.collection import SigmaCollection
-from sigma.backends.sqlite import sqlite
-from sigma.pipelines.sysmon import sysmon_pipeline
-from sigma.pipelines.windows import windows_logsource_pipeline
-from sigma.processing.resolver import ProcessingPipelineResolver
 
 SIGMA_RULES_URL = "https://github.com/SigmaHQ/sigma/archive/master.zip"
 DOWNLOAD_CHUNK_SIZE = 8192
-OUTPUT_DIR = "../data"
-SIGMA_ZIP_FILE = f"{OUTPUT_DIR}/sigma_rules.zip"
-SIGMA_EXTRACT_DIR = f"{OUTPUT_DIR}/sigma_rules"
-SIGMA_QUERIES_FILE = f"{OUTPUT_DIR}/sigma_queries.json"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(SCRIPT_DIR)
+OUTPUT_DIR = os.path.join(REPO_ROOT, "data")
+SIGMA_ZIP_FILE = os.path.join(OUTPUT_DIR, "sigma_rules.zip")
+SIGMA_EXTRACT_DIR = os.path.join(OUTPUT_DIR, "sigma_rules")
+SIGMA_QUERIES_FILE = os.path.join(OUTPUT_DIR, "sigma_queries.json")
 PROCESS_MONITOR_TABLE_NAME = "Events"  # server/VM/ProcessMonitor/SqlRequests.hpp
 TABLE_NAME_PLACEHOLDERS = ("<TABLE_NAME>", "Events")
 
@@ -24,6 +19,8 @@ TABLE_NAME_PLACEHOLDERS = ("<TABLE_NAME>", "Events")
 def download_sigma_rules() -> bool:
     """Download Sigma rules from SigmaHQ GitHub repository."""
     try:
+        import requests
+
         print(f"Downloading Sigma rules from {SIGMA_RULES_URL}...")
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         
@@ -70,6 +67,12 @@ def convert_sigma_rules() -> bool:
         return False
     
     try:
+        from sigma.collection import SigmaCollection
+        from sigma.backends.sqlite import sqlite
+        from sigma.pipelines.sysmon import sysmon_pipeline
+        from sigma.pipelines.windows import windows_logsource_pipeline
+        from sigma.processing.resolver import ProcessingPipelineResolver
+
         print("Setting up pySigma pipeline...")
         # Create the pipeline resolver
         piperesolver = ProcessingPipelineResolver()
@@ -99,30 +102,36 @@ def convert_sigma_rules() -> bool:
                 with open(rule_file, "r", encoding="utf-8") as f:
                     rule_content = f.read()
                 
-                rule = SigmaCollection.from_yaml(rule_content)
-                converted = sqlite_backend.convert(rule)
-                
-                for query in converted:
-                    if not query:
-                        continue  # Skip empty queries
-                    
-                    normalized = query
-                    for placeholder in TABLE_NAME_PLACEHOLDERS:
-                        if placeholder in normalized:
-                            normalized = normalized.replace(
-                                placeholder, PROCESS_MONITOR_TABLE_NAME
-                            )
-                    queries.append(normalized)
+                collection = SigmaCollection.from_yaml(rule_content)
+                for rule in collection.rules:
+                    try:
+                        converted = sqlite_backend.convert_rule(rule)
+                        level = str(rule.level) if rule.level else "unknown"
+
+
+                        for query in converted:
+                            if not query:
+                                continue  # Skip empty queries
+
+                            normalized = query
+                            for placeholder in TABLE_NAME_PLACEHOLDERS:
+                                if placeholder in normalized:
+                                    normalized = normalized.replace(
+                                        placeholder, PROCESS_MONITOR_TABLE_NAME
+                                    )
+                            queries.append({"query": normalized, "level": level})
+                    except Exception as e:
+                        errors += 1
+
                         
             except Exception as e:
                 errors += 1
-                # Skip rules that fail to convert (unsupported logsources, etc.)
                 continue
         
         # Save queries to JSON file
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         with open(SIGMA_QUERIES_FILE, "w", encoding="utf-8") as f:
-            json.dump(queries, f, indent=2)
+            json.dump(queries, f)
         
         print(f"Successfully converted {len(queries)} queries (skipped {errors} rules with errors)")
         print(f"Saved to {SIGMA_QUERIES_FILE}")
@@ -147,13 +156,19 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.download:
-        download_sigma_rules()
+        if not download_sigma_rules():
+            print("Download failed. Aborting.")
+            return
 
     if args.extract:
-        extract_sigma_rules()
+        if not extract_sigma_rules():
+            print("Extraction failed. Aborting.")
+            return
     
     if args.convert:
-        convert_sigma_rules()
+        if not convert_sigma_rules():
+            print("Conversion failed.")
+            return
     
     # If no arguments provided, show help
     if not args.download and not args.extract and not args.convert:

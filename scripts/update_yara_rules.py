@@ -1,8 +1,8 @@
 import zipfile
 import os
-import requests
 import argparse
 import subprocess
+import shutil
 
 # A list of sources (zip files), and in each source, a list of folders to ignore
 # ** garbage in garbage out: if you put a bad list, you get a bad result (maybe not even compile) **
@@ -10,12 +10,17 @@ YARA_RULES_SOURCES_AND_FOLDERS_TO_IGNORE = {
     "https://github.com/Yara-Rules/rules/archive/master.zip": ["deprecated"] # it's a decent list, that wasn't updated to yara-x, so a modification is needed before compilation (looka t the errors)
 }
 DOWNLOAD_CHUNK_SIZE = 8192
-OUTPUT_DIR = "../data"
-COMPILED_YARA_RULES_FILE = f"{OUTPUT_DIR}/compiled_yara_rules.yrc"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(SCRIPT_DIR)
+OUTPUT_DIR = os.path.join(REPO_ROOT, "data")
+COMPILED_YARA_RULES_FILE = os.path.join(OUTPUT_DIR, "compiled_yara_rules.yrc")
 
 
 def download_file_from_url(url: str, dest_path: str) -> bool:
     try:
+        import requests
+
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
         response = requests.get(url, stream=True)
         response.raise_for_status()
         with open(dest_path, "wb") as f:
@@ -35,47 +40,71 @@ def extract_zip_file(zip_path: str, extract_to: str) -> bool:
         raise FileNotFoundError(f"Zip file not found: {zip_path}")
 
     try:
+        os.makedirs(extract_to, exist_ok=True)
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall(extract_to)
 
         return True
     except Exception as e:
         print(f"Error extracting {zip_path}: {e}")
+        return False
 
 
-def download_yara_rules() -> None:
+def download_yara_rules() -> bool:
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    all_succeeded = True
+
     for i, (url, folders_to_ignore) in enumerate(
         YARA_RULES_SOURCES_AND_FOLDERS_TO_IGNORE.items()
     ):
         print(f"Downloading YARA rules from {url}...")
 
-        file_path = f"{OUTPUT_DIR}/yara_rules_{i}.zip"
-        download_file_from_url(url, file_path)
+        file_path = os.path.join(OUTPUT_DIR, f"yara_rules_{i}.zip")
+        if not download_file_from_url(url, file_path):
+            print(f"Skipping {url} due to download failure")
+            all_succeeded = False
+            continue
 
-        output_dir = f"{OUTPUT_DIR}/yara_rules_{i}"
-        extract_yara_rules(file_path, output_dir, folders_to_ignore)
+        output_dir = os.path.join(OUTPUT_DIR, f"yara_rules_{i}")
+        if not extract_yara_rules(file_path, output_dir, folders_to_ignore):
+            print(f"Skipping extraction for {file_path}")
+            all_succeeded = False
+
+    return all_succeeded
 
 
 def extract_yara_rules(
     file_path: str, output_dir: str, folders_to_ignore: list
-) -> None:
-    extract_zip_file(file_path, output_dir)
+) -> bool:
+    if not extract_zip_file(file_path, output_dir):
+        return False
 
     for folder in folders_to_ignore:
-        folder_path = f"{output_dir}/{folder}"
+        folder_path = os.path.join(output_dir, folder)
 
         if os.path.exists(folder_path):
             print(f"Removing {folder_path}...")
-            os.remove(folder_path)
+            if os.path.isdir(folder_path):
+                shutil.rmtree(folder_path)
+            else:
+                os.remove(folder_path)
+
+    return True
 
 
-def extract_yara_rules_batch() -> None:
+def extract_yara_rules_batch() -> bool:
+    all_succeeded = True
+
     for i, (url, folders_to_ignore) in enumerate(
         YARA_RULES_SOURCES_AND_FOLDERS_TO_IGNORE.items()
     ):
-        file_path = f"{OUTPUT_DIR}/yara_rules_{i}.zip"
-        output_dir = f"{OUTPUT_DIR}/yara_rules_{i}"
-        extract_yara_rules(file_path, output_dir, folders_to_ignore)
+        file_path = os.path.join(OUTPUT_DIR, f"yara_rules_{i}.zip")
+        output_dir = os.path.join(OUTPUT_DIR, f"yara_rules_{i}")
+        if not extract_yara_rules(file_path, output_dir, folders_to_ignore):
+            print(f"Skipping extraction for {file_path}")
+            all_succeeded = False
+
+    return all_succeeded
 
 
 def compile_yara_rules() -> None:
@@ -85,7 +114,7 @@ def compile_yara_rules() -> None:
 
     compiled_count = 0
     for i in range(len(YARA_RULES_SOURCES_AND_FOLDERS_TO_IGNORE)):
-        extract_dir = f"{OUTPUT_DIR}/yara_rules_{i}"
+        extract_dir = os.path.join(OUTPUT_DIR, f"yara_rules_{i}")
 
         if not os.path.exists(extract_dir):
             print(f"Skipping {extract_dir} (does not exist)")
@@ -102,8 +131,8 @@ def compile_yara_rules() -> None:
             print(f"No index.yar found in {extract_dir}")
             continue
 
-        compiled_output = os.path.abspath(
-            f"{OUTPUT_DIR}/compiled_yara_rules_file_{compiled_count}.yrc"
+        compiled_output = os.path.join(
+            OUTPUT_DIR, f"compiled_yara_rules_file_{compiled_count}.yrc"
         )
         index_yar_dir = os.path.dirname(index_yar_path)
 
@@ -132,7 +161,7 @@ def compile_yara_rules() -> None:
 
 def remove_downloaded_zip_files() -> None:
     for i in range(len(YARA_RULES_SOURCES_AND_FOLDERS_TO_IGNORE)):
-        zip_file_path = f"{OUTPUT_DIR}/yara_rules_{i}.zip"
+        zip_file_path = os.path.join(OUTPUT_DIR, f"yara_rules_{i}.zip")
         if os.path.exists(zip_file_path):
             print(f"Removing {zip_file_path}...")
             os.remove(zip_file_path)
@@ -160,14 +189,16 @@ def main() -> None:
     if args.download:
         print("Downloading YARA rules...")
         try:
-            download_yara_rules()
+            if not download_yara_rules():
+                print("One or more YARA downloads or extractions failed.")
         except Exception as e:
             print(f"Failed to download YARA rules: {e}")
 
     if args.extract:
         print("Extracting YARA rules...")
         try:
-            extract_yara_rules_batch()
+            if not extract_yara_rules_batch():
+                print("One or more YARA extractions failed.")
         except Exception as e:
             print(f"Failed to extract YARA rules: {e}")
 

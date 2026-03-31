@@ -2,77 +2,188 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="Source Files">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+      <UniqueIdentifier>{2F05C83B-6D75-4B55-9B42-5E9B6D0A5E11}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\detectors">
+      <UniqueIdentifier>{A2CFA686-5F8E-4FA5-9B1E-1B0F2AD6D4E1}</UniqueIdentifier>
     </Filter>
     <Filter Include="Header Files">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+      <UniqueIdentifier>{C8B0C7A9-2D40-4D6F-9C58-1BBD1D7E1B3A}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resource Files">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    <Filter Include="Header Files\core">
+      <UniqueIdentifier>{D48E6B5E-7A47-4D5B-9C56-5D8D1C0F2A1A}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Header Files\structs">
-      <UniqueIdentifier>{31fc50e2-1ed9-4a51-a330-849ae657cc8c}</UniqueIdentifier>
+    <Filter Include="Header Files\etw">
+      <UniqueIdentifier>{F8E0C63B-2B1C-4F58-8D54-9A0D4E7F0B21}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\structs">
-      <UniqueIdentifier>{b904ac31-f48c-4157-ad20-2d74457be7f6}</UniqueIdentifier>
+    <Filter Include="Header Files\storage">
+      <UniqueIdentifier>{4C5FDE0A-1A6B-4D5F-9A42-0D8F77B8A911}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\analysis">
+      <UniqueIdentifier>{9A0F7C21-CCB2-4C27-9C8E-0B0F0C2D5D22}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\detectors">
+      <UniqueIdentifier>{E8C6A4A0-9E2A-4F0B-8B6C-7D5B0A1B2C33}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\pch">
+      <UniqueIdentifier>{6C6A8C2B-4F54-46EF-9A2E-88E8D4B2AA44}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="processMonitor.cpp">
+    <ClCompile Include="src\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="main.cpp">
+    <ClCompile Include="src\ProcessMonitor.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="EventWriter.cpp">
+    <ClCompile Include="src\EventWriter.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="UserBlock.cpp">
-      <Filter>Source Files\structs</Filter>
-    </ClCompile>
-    <ClCompile Include="KernelBlock.cpp">
-      <Filter>Source Files\structs</Filter>
-    </ClCompile>
-    <ClCompile Include="Utils.cpp">
+    <ClCompile Include="src\KernelBlock.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="EtwGuids.hpp">
-      <Filter>Header Files</Filter>
+    <ClCompile Include="src\UserBlock.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Utils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ProviderProfiles.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\AttackMetadata.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ThreadAnalysisEngine.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ThreadCaches.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ThreadHelpers.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SelfTest.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SelfTestLive.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\detectors\RemoteThreadCreationDetector.cpp">
+      <Filter>Source Files\detectors</Filter>
+    </ClCompile>
+    <ClCompile Include="src\detectors\AsynchronousProcedureCallQueueingDetector.cpp">
+      <Filter>Source Files\detectors</Filter>
+    </ClCompile>
+    <ClCompile Include="src\detectors\ThreadHijackDetector.cpp">
+      <Filter>Source Files\detectors</Filter>
+    </ClCompile>
+    <ClCompile Include="src\detectors\ThreatIntelInjectionDetector.cpp">
+      <Filter>Source Files\detectors</Filter>
+    </ClCompile>
+    <ClCompile Include="src\detectors\RegistryRunKeyPersistenceDetector.cpp">
+      <Filter>Source Files\detectors</Filter>
+    </ClCompile>
+    <ClCompile Include="src\detectors\ScheduledTaskPersistenceDetector.cpp">
+      <Filter>Source Files\detectors</Filter>
+    </ClCompile>
+    <ClCompile Include="src\detectors\ServicePersistenceDetector.cpp">
+      <Filter>Source Files\detectors</Filter>
+    </ClCompile>
+    <ClCompile Include="src\detectors\LsassCredentialAccessDetector.cpp">
+      <Filter>Source Files\detectors</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="processMonitor.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="EventWriter.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Constants.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="pch.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\pch</Filter>
     </ClInclude>
-    <ClInclude Include="Caches.hpp">
-      <Filter>Header Files\structs</Filter>
+    <ClInclude Include="include\core\ProcessMonitor.hpp">
+      <Filter>Header Files\core</Filter>
     </ClInclude>
-    <ClInclude Include="KernelBlock.hpp">
-      <Filter>Header Files\structs</Filter>
+    <ClInclude Include="include\core\Caches.hpp">
+      <Filter>Header Files\core</Filter>
     </ClInclude>
-    <ClInclude Include="Threads.hpp">
-      <Filter>Header Files\structs</Filter>
+    <ClInclude Include="include\core\Constants.hpp">
+      <Filter>Header Files\core</Filter>
     </ClInclude>
-    <ClInclude Include="UserBlock.hpp">
-      <Filter>Header Files\structs</Filter>
+    <ClInclude Include="include\core\Threads.hpp">
+      <Filter>Header Files\core</Filter>
     </ClInclude>
-    <ClInclude Include="Utils.hpp">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="include\core\SelfTest.hpp">
+      <Filter>Header Files\core</Filter>
     </ClInclude>
-    <ClInclude Include="SqlRequests.hpp">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="include\etw\EtwGuids.hpp">
+      <Filter>Header Files\etw</Filter>
+    </ClInclude>
+    <ClInclude Include="include\etw\KernelBlock.hpp">
+      <Filter>Header Files\etw</Filter>
+    </ClInclude>
+    <ClInclude Include="include\etw\ProviderProfiles.hpp">
+      <Filter>Header Files\etw</Filter>
+    </ClInclude>
+    <ClInclude Include="include\etw\UserBlock.hpp">
+      <Filter>Header Files\etw</Filter>
+    </ClInclude>
+    <ClInclude Include="include\storage\EventWriter.hpp">
+      <Filter>Header Files\storage</Filter>
+    </ClInclude>
+    <ClInclude Include="include\storage\EventWriterConstants.hpp">
+      <Filter>Header Files\storage</Filter>
+    </ClInclude>
+    <ClInclude Include="include\storage\SqlRequests.hpp">
+      <Filter>Header Files\storage</Filter>
+    </ClInclude>
+    <ClInclude Include="include\analysis\CrossProcWindow.hpp">
+      <Filter>Header Files\analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="include\analysis\Finding.hpp">
+      <Filter>Header Files\analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="include\analysis\IThreadDetector.hpp">
+      <Filter>Header Files\analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="include\analysis\NormalizedEvent.hpp">
+      <Filter>Header Files\analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="include\analysis\AttackMetadata.hpp">
+      <Filter>Header Files\analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="include\analysis\ThreadAnalysisEngine.hpp">
+      <Filter>Header Files\analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="include\analysis\ThreadCaches.hpp">
+      <Filter>Header Files\analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="include\analysis\ThreadHelpers.hpp">
+      <Filter>Header Files\analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="include\analysis\ThreadState.hpp">
+      <Filter>Header Files\analysis</Filter>
+    </ClInclude>
+    <ClInclude Include="include\detectors\RemoteThreadCreationDetector.hpp">
+      <Filter>Header Files\detectors</Filter>
+    </ClInclude>
+    <ClInclude Include="include\detectors\AsynchronousProcedureCallQueueingDetector.hpp">
+      <Filter>Header Files\detectors</Filter>
+    </ClInclude>
+    <ClInclude Include="include\detectors\ThreadHijackDetector.hpp">
+      <Filter>Header Files\detectors</Filter>
+    </ClInclude>
+    <ClInclude Include="include\detectors\ThreatIntelInjectionDetector.hpp">
+      <Filter>Header Files\detectors</Filter>
+    </ClInclude>
+    <ClInclude Include="include\detectors\RegistryRunKeyPersistenceDetector.hpp">
+      <Filter>Header Files\detectors</Filter>
+    </ClInclude>
+    <ClInclude Include="include\detectors\ScheduledTaskPersistenceDetector.hpp">
+      <Filter>Header Files\detectors</Filter>
+    </ClInclude>
+    <ClInclude Include="include\detectors\ServicePersistenceDetector.hpp">
+      <Filter>Header Files\detectors</Filter>
+    </ClInclude>
+    <ClInclude Include="include\detectors\LsassCredentialAccessDetector.hpp">
+      <Filter>Header Files\detectors</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

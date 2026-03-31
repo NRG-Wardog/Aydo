@@ -17,6 +17,7 @@ std::string getEnvOrDefault(const char *name, std::string_view def);
 extern const std::string VM_RUN_PATH;
 extern const std::string ANALYSIS_VM_PATH;
 extern const std::string SANDBOXES_DIRECTORY_PATH;
+extern const std::string VM_START_MODE;
 extern const std::string HOST_FOLDER_PATH;
 extern const std::string SHARE_FILE_NAME;
 extern const std::string GUEST_USER;
@@ -30,6 +31,9 @@ extern const std::string PROCCES_RUNNER_FILE_PATH_GUEST;
 extern const std::string DLL_INJECTOR_FILE_PATH_GUEST;
 extern const std::string SUSPICIOUS_WORKDIR_GUEST;
 extern const std::string GUEST_SHARED_DIR;
+extern const unsigned int VM_TOOLS_MAX_RETRIES;
+extern const unsigned int VM_TOOLS_SLEEP_MS;
+extern const unsigned int VM_SHUTDOWN_GRACE_MS;
 /*
  * Path in BOTH
  */

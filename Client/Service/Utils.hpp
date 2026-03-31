@@ -7,22 +7,6 @@
 #include <string>
 #include <vector>
 
-namespace Utils::Const {
-
-// Maximum Unicode path length in WCHARs for extended paths (\\?\ style).
-inline constexpr DWORD kMaxUnicodePathChars = 32767;
-
-// Multiplier used when reserving a PSAPI device-path buffer (e.g., MAX_PATH * 8).
-inline constexpr size_t kPsapiPathReserveMultiplier = 8;
-
-// Buffer for a single QueryDosDeviceW mapping (characters, not bytes).
-inline constexpr DWORD kDosDeviceTargetBufChars = 1024;
-
-// Buffer for GetLogicalDriveStringsW (characters).
-inline constexpr DWORD kDriveStringsBufChars = 512;
-
-} // namespace Utils::Const
-
 namespace Utils {
 std::vector<uint8_t> readFile(const std::string &path);
 
@@ -54,6 +38,11 @@ std::wstring resolve_process_path(DWORD pid, const std::wstring &imageFromDriver
 
 // UTF-16 (std::wstring) to UTF-8 (std::string). Returns empty string if input empty.
 std::string wstring_to_utf8(const std::wstring &w);
+std::string wstring_to_utf8(const wchar_t *w);
+
+// UTF-8 (std::string) to UTF-16 (std::wstring). Returns empty string if input empty.
+std::wstring utf8_to_wstring(const std::string &s);
+std::wstring utf8_to_wstring(const char *s);
 
 // compute SHA-256 incrementally
 std::string computeSHA256(const std::string &path);
@@ -62,5 +51,11 @@ double calculateEntropy(const std::vector<int> &countedBytes, std::streamsize to
 
 // Check if a file is digitally signed by Microsoft/Windows
 bool isWindowsSigned(const std::string &path);
+
+// Quarantine a file (moves to ./quarantine relative to service)
+bool quarantineFile(const std::string &path);
+
+// Delete a file
+bool deleteFile(const std::string &path);
 
 } // namespace Utils

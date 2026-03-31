@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "outDir": "dist/main",
+    "noEmit": false
+  },
+  "include": [
+    "src/main/**/*",
+    "src/shared/**/*"
+  ],
+  "exclude": [
+    "src/renderer/**/*",
+    "src/preload/**/*"
+  ]
+}
