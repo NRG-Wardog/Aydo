@@ -7,13 +7,14 @@ const appRoot = path.resolve(testDirectory, "..", "..");
 
 test("navigation and simulator events", async () => {
   const app = await electron.launch({
-    args: ["."],
+    args: [".", "--no-sandbox"],
     cwd: appRoot,
     env: {
       ...process.env,
       AYDO_ENGINE: "simulator",
       AYDO_SIM_FAST: "1",
-      AYDO_AUTH_OFFLINE: "1"
+      AYDO_AUTH_OFFLINE: "1",
+      ELECTRON_DISABLE_SANDBOX: "1"
     }
   });
 
