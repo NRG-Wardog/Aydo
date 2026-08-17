@@ -25,7 +25,7 @@ test("navigation and simulator events", async () => {
 
     await page.getByRole("button", { name: "Continue as Guest" }).click();
 
-    await expect(page.getByText("Dashboard")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
     await expect(page.getByText("Protection Pulse")).toBeVisible();
 
     await page.getByRole("button", { name: "Start Scan" }).click();
