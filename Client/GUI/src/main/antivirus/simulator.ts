@@ -25,7 +25,8 @@ const defaultSettings: AvSettings = {
   refreshToken: "",
   killThreshold: 150,
   entropyThreshold: 6.0,
-  runtime: 60
+  runtime: 60,
+  infectedFileAction: "none"
 };
 
 export class AntivirusSimulator extends EventEmitter implements AntivirusEngine {

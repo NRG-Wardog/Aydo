@@ -1,4 +1,12 @@
 import { X, Minus, Square } from "lucide-react";
+import type { CSSProperties } from "react";
+
+type ElectronDragStyle = CSSProperties & {
+  WebkitAppRegion: "drag" | "no-drag";
+};
+
+const dragStyle = { WebkitAppRegion: "drag" } as ElectronDragStyle;
+const noDragStyle = { WebkitAppRegion: "no-drag" } as ElectronDragStyle;
 
 const TitleBar = () => {
   const handleClose = () => {
@@ -22,7 +30,7 @@ const TitleBar = () => {
   return (
     <div
       className="flex items-center justify-between h-11 bg-slate-900/95 backdrop-blur-2xl border-b border-white/[0.06] select-none fixed top-0 left-0 right-0 z-50"
-      style={{ WebkitAppRegion: "drag" as any }}
+      style={dragStyle}
       data-tauri-drag-region
     >
       <div className="flex items-center gap-2 px-4">
@@ -38,7 +46,7 @@ const TitleBar = () => {
           <button
             onClick={handleMinimize}
             className="w-3 h-3 rounded-full bg-yellow-500/90 hover:bg-yellow-500 transition-all duration-150 flex items-center justify-center group"
-            style={{ WebkitAppRegion: "no-drag" as any }}
+            style={noDragStyle}
             title="Minimize"
           >
             <Minus
@@ -49,7 +57,7 @@ const TitleBar = () => {
           <button
             onClick={handleMaximize}
             className="w-3 h-3 rounded-full bg-green-500/90 hover:bg-green-500 transition-all duration-150 flex items-center justify-center group"
-            style={{ WebkitAppRegion: "no-drag" as any }}
+            style={noDragStyle}
             title="Maximize"
           >
             <Square
@@ -60,7 +68,7 @@ const TitleBar = () => {
           <button
             onClick={handleClose}
             className="w-3 h-3 rounded-full bg-red-500/90 hover:bg-red-500 transition-all duration-150 flex items-center justify-center group"
-            style={{ WebkitAppRegion: "no-drag" as any }}
+            style={noDragStyle}
             title="Close"
           >
             <X
