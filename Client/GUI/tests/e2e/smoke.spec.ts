@@ -1,7 +1,9 @@
 ﻿import { _electron as electron, expect, test } from "@playwright/test";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const appRoot = path.resolve(__dirname, "..", "..");
+const testDirectory = path.dirname(fileURLToPath(import.meta.url));
+const appRoot = path.resolve(testDirectory, "..", "..");
 
 test("navigation and simulator events", async () => {
   const app = await electron.launch({
