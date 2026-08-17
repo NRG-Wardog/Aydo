@@ -77,9 +77,23 @@ jobs:
       - name: Install native dependencies
         shell: pwsh
         run: |
-          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install `
-            --triplet x64-windows-static `
-            --x-manifest-root "$env:GITHUB_WORKSPACE"
+          $maximumAttempts = 3
+          for ($attempt = 1; $attempt -le $maximumAttempts; $attempt++) {
+            & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install `
+              --triplet x64-windows-static `
+              --x-manifest-root "$env:GITHUB_WORKSPACE"
+
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+
+            if ($attempt -lt $maximumAttempts) {
+              Write-Warning "vcpkg install attempt $attempt failed; retrying in 30 seconds."
+              Start-Sleep -Seconds 30
+            }
+          }
+
+          throw "vcpkg install failed after $maximumAttempts attempts."
 
       - name: Build user-mode projects
         shell: pwsh
