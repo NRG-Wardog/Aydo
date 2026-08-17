@@ -30,7 +30,7 @@ test("navigation and simulator events", async () => {
 
     await page.getByRole("button", { name: "Scan Directory", exact: true }).click();
     await expect(page.getByText("Select Directory to Scan")).toBeVisible();
-    await page.getByRole("button", { name: "Scan Directory", exact: true }).click();
+    await page.getByRole("button", { name: "Scan Directory", exact: true }).last().click();
     await expect(page.getByText(/Scan running/i)).toBeVisible();
     await expect(page.getByText("Scan completed")).toBeVisible({ timeout: 20_000 });
 
