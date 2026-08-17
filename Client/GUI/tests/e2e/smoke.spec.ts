@@ -23,9 +23,7 @@ test("navigation and simulator events", async () => {
 
     await expect(page.getByText("Threat Operations Login")).toBeVisible();
 
-    await page.locator("input[type=\"email\"]").fill("analyst@aydo.local");
-    await page.locator("input[type=\"password\"]").fill("password123");
-    await page.getByRole("button", { name: "Access Console" }).click();
+    await page.getByRole("button", { name: "Continue as Guest" }).click();
 
     await expect(page.getByText("Dashboard")).toBeVisible();
     await expect(page.getByText("Protection Pulse")).toBeVisible();
