@@ -1,0 +1,165 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+      - production
+      - v4.0.0
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-tests:
+    name: Python update-script tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run unit tests
+        run: python -m unittest discover -s tests/python -v
+      - name: Compile Python sources
+        run: python -m compileall -q scripts tests/python
+
+  desktop-tests:
+    name: Desktop typecheck, build, and E2E
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Client/GUI
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.1.0"
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Install Playwright system dependencies
+        run: bunx playwright install --with-deps chromium
+      - name: Run desktop CI tests
+        run: xvfb-run --auto-servernum bun run test:ci
+      - name: Upload Playwright diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-playwright-diagnostics
+          path: |
+            Client/GUI/playwright-report
+            Client/GUI/test-results
+          if-no-files-found: ignore
+
+  native-tests:
+    name: Native Windows build and self-tests
+    runs-on: windows-2022
+    env:
+      VCPKG_DEFAULT_TRIPLET: x64-windows-static
+      VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            C:\vcpkg\installed
+            C:\Users\runneradmin\AppData\Local\vcpkg\archives
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+
+      - name: Install native dependencies
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install `
+            --triplet x64-windows-static `
+            --x-manifest-root "$env:GITHUB_WORKSPACE"
+
+      - name: Build user-mode projects
+        shell: pwsh
+        run: |
+          $projects = @(
+            "server\VM\ProcessRunnerDLL\ProcessRunnerDLL.vcxproj",
+            "server\VM\ProcessRunner\ProcessRunner.vcxproj",
+            "server\VM\VMRunner\VMRunner.vcxproj",
+            "server\VM\ProcessMonitor\ProcessMonitor.vcxproj",
+            "server\Server\Server.vcxproj"
+          )
+          foreach ($project in $projects) {
+            msbuild $project /nologo /m /restore /t:Build `
+              /p:Configuration=Release /p:Platform=x64 `
+              /p:VcpkgEnableManifest=true `
+              /p:VcpkgManifestRoot="$env:GITHUB_WORKSPACE" `
+              /p:VcpkgTriplet=x64-windows-static
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Run deterministic native self-tests
+        shell: pwsh
+        run: ./scripts/ci/run_native_tests.ps1 -Configuration Release -SkipEndpointService
+
+      - name: Validate endpoint service project coverage
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content Client/Service/Service.vcxproj
+          $sources = @($project.Project.ItemGroup.ClCompile.Include)
+          $required = @("Main.cpp", "ProcessMonitor.cpp", "Yara\YScanningEngine.cpp")
+          foreach ($source in $required) {
+            if ($sources -notcontains $source) {
+              throw "Endpoint service project is missing expected source: $source"
+            }
+          }
+
+      - name: Validate kernel driver project
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content Client/KernelDriver/KernelDriver.vcxproj
+          if ($project.Project.ItemGroup.ClCompile.Count -eq 0) {
+            throw "Kernel driver project has no compile inputs"
+          }
+          if ($project.Project.PropertyGroup.PlatformToolset -notcontains "WindowsKernelModeDriver10.0") {
+            throw "Kernel driver project is not configured for the WDK"
+          }
+
+      - name: Validate WiX projects
+        run: msbuild Installer/Installer.wixproj /nologo /restore /t:Compile /p:Configuration=Release /p:Platform=x64
+
+      - name: Upload native binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: aydo-native-release
+          path: |
+            x64/Release/**
+            server/Server/x64/Release/**
+            server/VM/VMRunner/x64/Release/**
+            server/VM/ProcessMonitor/bin/x64/Release/**
+          if-no-files-found: error
+
+  ci-success:
+    name: CI required checks
+    if: always()
+    needs:
+      - python-tests
+      - desktop-tests
+      - native-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all test suites
+        env:
+          NEEDS: ${{ toJson(needs) }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+
+          results = {name: job["result"] for name, job in json.loads(os.environ["NEEDS"]).items()}
+          print(results)
+          sys.exit(0 if all(result == "success" for result in results.values()) else 1)
+          PY

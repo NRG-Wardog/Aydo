@@ -128,9 +128,34 @@ the upstream service blocks automated retrieval.
 - Run the ProcessMonitor deterministic and live tests described in
   [`server/VM/ProcessMonitor/README.md`](server/VM/ProcessMonitor/README.md).
 - Run `bun run test:e2e` from `Client/GUI` for the desktop smoke tests.
+- Run `python -m unittest discover -s tests/python -v` for update-script tests.
+- Run `scripts/ci/run_native_tests.ps1` after a native Release build to execute
+  all deterministic native self-tests.
 
 VM integration tests require a configured VMware guest and cannot run safely
 without the paths and credentials from the local server configuration.
+
+## CI/CD
+
+GitHub Actions runs the following checks for pull requests and pushes to the
+release branches:
+
+- Python update-script unit tests and bytecode compilation
+- desktop TypeScript checks, production build, and Playwright Electron E2E tests
+- Windows user-mode builds backed by the repository vcpkg manifest
+- VMRunner, backend configuration, and ProcessMonitor self-tests
+- kernel-driver project validation and WiX source validation
+
+The endpoint service project is structurally validated in hosted CI, but its
+binary build still requires the separately supplied YARA-X C API library. Run
+`scripts/ci/run_native_tests.ps1` without `-SkipEndpointService` on a fully
+provisioned build machine to include its deterministic self-test.
+
+Tags matching `v*` run the release workflow, package the Windows desktop app,
+upload the build artifact, and publish it to the matching GitHub Release. The
+kernel driver requires the WDK and production signing credentials; signed
+driver and full MSI publication should only be enabled after those secrets are
+configured in the repository environment.
 
 ## Branch Promotion
 
