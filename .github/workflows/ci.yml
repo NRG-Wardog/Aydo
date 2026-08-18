@@ -76,7 +76,13 @@ jobs:
 
       - name: Install native dependencies
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
+          $assetScript = Join-Path $env:GITHUB_WORKSPACE "scripts\ci\fetch-vcpkg-asset.ps1"
+          $env:X_VCPKG_ASSET_SOURCES = "clear;x-script,pwsh -NoProfile -File `"$assetScript`" `"{url}`" `"{sha512}`" `"{dst}`""
+          $env:VCPKG_KEEP_ENV_VARS = "GITHUB_TOKEN"
+
           $maximumAttempts = 3
           for ($attempt = 1; $attempt -le $maximumAttempts; $attempt++) {
             & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install `
