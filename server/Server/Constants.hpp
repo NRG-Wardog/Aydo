@@ -23,14 +23,14 @@ constexpr size_t ARGON2_ITERATIONS = 1;
 constexpr std::string_view UPLOADS_DIRECTORY = "uploads";
 constexpr std::string_view MAX_UPLOAD_BYTES_KEY = "maxUploadBytes";
 
-// VMRunner
-constexpr std::string_view VMRUNNER_PATH = R"(C:\Dev\Magshii\Project\DDDDDDDD\aydo\x64\Release\VMRunner.exe)";
-constexpr std::string_view SANDBOXES_DIRECTORY_PATH = R"(D:\veeeertoooaaalll)";
-
+// Dynamic scan processing
 constexpr double DEFAULT_SCAN_CHECK_INTERVAL_S = 5.0;
 
-inline constexpr std::array<const char *, 1> SIGMA_QUERY_PATHS = {
-    R"(C:\Dev\Magshii\Project\DDDDDDDD\aydo\data\sigma_queries.json)",
+// Generated Sigma query data is repository-relative. The server may be started
+// from either the repository root or the server directory during development.
+inline constexpr std::array<const char *, 2> SIGMA_QUERY_PATHS = {
+    "data/sigma_queries.json",
+    "../data/sigma_queries.json",
 };
 
 constexpr int RETRY_SCAN_IF_FAILED_SECONDS = 300;
