@@ -16,6 +16,62 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  repository-hygiene:
+    name: Repository hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject tracked local configuration and workstation residue
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          tracked = {
+              item.decode("utf-8")
+              for item in subprocess.check_output(["git", "ls-files", "-z"]).split(b"\0")
+              if item
+          }
+
+          forbidden_files = {"server/Server/config.json"}
+          present = sorted(forbidden_files & tracked)
+          if present:
+              raise SystemExit(
+                  "Local configuration must not be tracked:\n" + "\n".join(present)
+              )
+
+          if "server/Server/config.example.json" not in tracked:
+              raise SystemExit("The neutral server configuration example is missing")
+
+          markers = (
+              r"C:\Users\tzema",
+              r"C:\Users\KAN12",
+              r"C:\Users\Cyber_user",
+              r"C:\Dev\Magshii",
+              r"D:\veee",
+              "secret-shhhh-dont-tell",
+          )
+          suffixes = {
+              ".c", ".cc", ".cpp", ".h", ".hpp", ".json",
+              ".py", ".ts", ".tsx", ".vcxproj", ".wxs",
+          }
+          findings = []
+          for relative in sorted(tracked):
+              path = Path(relative)
+              if path.suffix.lower() not in suffixes or not path.is_file():
+                  continue
+              text = path.read_text(encoding="utf-8", errors="ignore")
+              for marker in markers:
+                  if marker in text:
+                      findings.append(f"{relative}: contains {marker!r}")
+
+          if findings:
+              raise SystemExit(
+                  "Developer-specific configuration residue found:\n"
+                  + "\n".join(findings)
+              )
+          PY
+
   python-tests:
     name: Python update-script tests
     runs-on: ubuntu-latest
@@ -201,6 +257,7 @@ jobs:
     name: CI required checks
     if: always()
     needs:
+      - repository-hygiene
       - python-tests
       - desktop-tests
       - native-tests
