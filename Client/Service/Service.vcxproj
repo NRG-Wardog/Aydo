@@ -70,25 +70,8 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
-    <LibraryPath>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release;$(LibraryPath)</LibraryPath>
-    <IncludePath>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release\include;$(IncludePath)</IncludePath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
-    <LibraryPath>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release;$(LibraryPath)</LibraryPath>
-    <IncludePath>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release\include;$(IncludePath)</IncludePath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
-    <LibraryPath>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release;$(LibraryPath)</LibraryPath>
-    <IncludePath>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release\include;$(IncludePath)</IncludePath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
-    <LibraryPath>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release;$(LibraryPath)</LibraryPath>
-    <IncludePath>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release\include;$(IncludePath)</IncludePath>
+  <PropertyGroup Label="ExternalDependencies">
+    <YaraXRoot Condition="'$(YaraXRoot)'=='' and '$(YARA_X_ROOT)'!=''">$(YARA_X_ROOT)</YaraXRoot>
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg">
     <VcpkgEnableManifest>true</VcpkgEnableManifest>
@@ -108,12 +91,13 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <AdditionalIncludeDirectories>$(YaraXRoot);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>yara_x_capi.lib;wintrust.lib;Psapi.lib;ws2_32.lib;advapi32.lib;userenv.lib;bcrypt.lib;ntdll.lib;Crypt32.lib;Secur32.lib;Advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(YaraXRoot);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -127,12 +111,13 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <AdditionalIncludeDirectories>$(YaraXRoot);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>yara_x_capi.lib;wintrust.lib;Psapi.lib;ws2_32.lib;advapi32.lib;userenv.lib;bcrypt.lib;ntdll.lib;Crypt32.lib;Secur32.lib;Advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(YaraXRoot);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -144,13 +129,13 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <AdditionalIncludeDirectories>D:\yara-x\target\x86_64-pc-windows-msvc\release;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(YaraXRoot);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>yara_x_capi.lib;wintrust.lib;Psapi.lib;ws2_32.lib;advapi32.lib;userenv.lib;bcrypt.lib;ntdll.lib;Crypt32.lib;Secur32.lib;Advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release;D:\yara-x\target\x86_64-pc-windows-msvc\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(YaraXRoot);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -164,13 +149,13 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <AdditionalIncludeDirectories>D:\yara-x\target\x86_64-pc-windows-msvc\release;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(YaraXRoot);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>yara_x_capi.lib;wintrust.lib;Psapi.lib;ws2_32.lib;advapi32.lib;userenv.lib;bcrypt.lib;ntdll.lib;Crypt32.lib;Secur32.lib;Advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Users\tzema\Downloads\yara-x\target\x86_64-pc-windows-msvc\release;D:\yara-x\target\x86_64-pc-windows-msvc\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(YaraXRoot);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -216,6 +201,11 @@
     <ClInclude Include="Yara\YaraRuleConstants.hpp" />
     <ClInclude Include="Yara\YaraScoringSystem.hpp" />
   </ItemGroup>
+  <Target Name="ValidateYaraXDependency" BeforeTargets="ClCompile">
+    <Error Condition="'$(YaraXRoot)'==''" Text="YARA-X C API is not configured. Set YARA_X_ROOT to the release directory containing yara_x.h and yara_x_capi.lib, or pass /p:YaraXRoot=... to MSBuild." />
+    <Error Condition="'$(YaraXRoot)'!='' and !Exists('$(YaraXRoot)\yara_x.h')" Text="YARA-X header not found at $(YaraXRoot)\yara_x.h. Set YARA_X_ROOT to the C API release directory." />
+    <Error Condition="'$(YaraXRoot)'!='' and !Exists('$(YaraXRoot)\yara_x_capi.lib')" Text="YARA-X static library not found at $(YaraXRoot)\yara_x_capi.lib. Set YARA_X_ROOT to the C API release directory." />
+  </Target>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
