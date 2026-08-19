@@ -90,20 +90,31 @@ jobs:
               --x-manifest-root "$env:GITHUB_WORKSPACE"
 
             if ($LASTEXITCODE -eq 0) {
-              exit 0
+              break
             }
 
             if ($attempt -lt $maximumAttempts) {
               Write-Warning "vcpkg install attempt $attempt failed; retrying in 30 seconds."
               Start-Sleep -Seconds 30
+            } else {
+              throw "vcpkg install failed after $maximumAttempts attempts."
             }
           }
 
-          throw "vcpkg install failed after $maximumAttempts attempts."
+          # The hosted runner ships vcpkg, but direct .vcxproj builds do not
+          # automatically import its MSBuild integration. Register the current
+          # runner's vcpkg instance so manifest dependencies contribute their
+          # include/library paths to every native project.
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" integrate install
+          if ($LASTEXITCODE -ne 0) {
+            throw "vcpkg MSBuild integration failed."
+          }
 
       - name: Build user-mode projects
         shell: pwsh
         run: |
+          $vcpkgRoot = "$env:VCPKG_INSTALLATION_ROOT\"
+          $vcpkgInstalledDir = Join-Path $env:GITHUB_WORKSPACE "vcpkg_installed\"
           $projects = @(
             "server\VM\ProcessRunnerDLL\ProcessRunnerDLL.vcxproj",
             "server\VM\ProcessRunner\ProcessRunner.vcxproj",
@@ -115,7 +126,9 @@ jobs:
             msbuild $project /nologo /m /restore /t:Build `
               /p:Configuration=Release /p:Platform=x64 `
               /p:VcpkgEnableManifest=true `
-              /p:VcpkgManifestRoot="$env:GITHUB_WORKSPACE" `
+              /p:VcpkgManifestRoot="$env:GITHUB_WORKSPACE\" `
+              /p:VcpkgRoot="$vcpkgRoot" `
+              /p:VcpkgInstalledDir="$vcpkgInstalledDir" `
               /p:VcpkgTriplet=x64-windows-static
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
