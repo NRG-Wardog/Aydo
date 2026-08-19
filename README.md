@@ -27,13 +27,25 @@ sandbox pipeline.
 - C++20-capable MSVC toolchain (`v143`)
 - VMware Workstation with `vmrun.exe` for dynamic analysis
 - PostgreSQL for the backend
-- Drogon and the native dependencies referenced by the Visual Studio projects
+- the native dependencies declared in `vcpkg.json`
+- YARA-X C API files for the endpoint service
 - Bun 1.1 or newer for the desktop application
 - WiX Toolset 6 for installer builds
 - Python 3 for database and rule update scripts
 
-Some project files currently contain machine-specific native include and
-library paths. Adjust them for your local vcpkg/SDK installation before building.
+The reusable native dependencies are resolved through the repository vcpkg
+manifest. The endpoint service keeps YARA-X as an explicit external dependency
+instead of embedding a developer workstation path. Set `YARA_X_ROOT` to the
+C API release directory containing `yara_x.h` and `yara_x_capi.lib`, or pass
+the same directory as `/p:YaraXRoot=...` to MSBuild. The project fails with a
+clear configuration error when those files are not available.
+
+Sandbox paths and guest credentials belong in local configuration, not source
+control. `server/Server/config.example.json` contains neutral placeholders; the
+backend validates that contract and exports the resolved sandbox settings to
+VMRunner. Direct VMRunner execution can override the same values with
+environment variables such as `ANALYSIS_VM_PATH`, `SANDBOXES_DIRECTORY_PATH`,
+`GUEST_USER`, `GUEST_PASS`, and the support-binary path variables.
 
 ## Build the Native Solution
 
