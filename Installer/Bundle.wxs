@@ -153,14 +153,14 @@
       <Component Id="AaaArchive" Guid="*">
         <File
           Id="Aaa7z"
-          Source="C:\Dev\Magshii\Project\FFFFFFFF\data\aaa.7z"
+          Source="..\data\aaa.7z"
           KeyPath="yes"
         />
       </Component>
       <Component Id="FileHashesDb" Guid="*">
         <File
           Id="FileHashesDbFile"
-          Source="C:\Dev\Magshii\Project\AAAAAAA\aydo\data\file_hashes.db"
+          Source="..\data\file_hashes.db"
           KeyPath="yes"
         />
       </Component>
