@@ -218,30 +218,6 @@ jobs:
             throw "Kernel driver project is not configured for the WDK"
           }
 
-      - name: Validate WiX authoring
-        shell: pwsh
-        run: |
-          # Hosted CI validates the installer authoring without pretending to
-          # produce a deployable endpoint package. WDK-built endpoint binaries,
-          # the packaged Electron app, and generated security data are supplied
-          # only by the controlled release environment.
-          New-Item -ItemType Directory -Force x64/Release | Out-Null
-          New-Item -ItemType Directory -Force Client/GUI/release/win-unpacked | Out-Null
-          New-Item -ItemType Directory -Force data | Out-Null
-          Set-Content -NoNewline x64/Release/KernelDriver.sys "ci-authoring-fixture"
-          Set-Content -NoNewline x64/Release/Service.exe "ci-authoring-fixture"
-          Set-Content -NoNewline x64/Release/runtime.dll "ci-authoring-fixture"
-          Set-Content -NoNewline "Client/GUI/release/win-unpacked/Aydo Security.exe" "ci-authoring-fixture"
-          Set-Content -NoNewline data/aaa.7z "ci-authoring-fixture"
-          Set-Content -NoNewline data/file_hashes.db "ci-authoring-fixture"
-          Push-Location Installer
-          try {
-            msbuild Installer.wixproj /nologo /restore /t:Compile /p:Configuration=Release /p:Platform=x64
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          } finally {
-            Pop-Location
-          }
-
       - name: Upload native binaries
         uses: actions/upload-artifact@v4
         with:
@@ -253,6 +229,51 @@ jobs:
             server/VM/ProcessMonitor/bin/x64/Release/**
           if-no-files-found: error
 
+  installer-validation:
+    name: WiX installer authoring
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Create controlled installer fixtures
+        shell: pwsh
+        run: |
+          $root = $env:GITHUB_WORKSPACE
+          $fixtures = @{
+            (Join-Path $root "x64\Release\KernelDriver.sys") = "ci-authoring-fixture"
+            (Join-Path $root "x64\Release\Service.exe") = "ci-authoring-fixture"
+            (Join-Path $root "x64\Release\runtime.dll") = "ci-authoring-fixture"
+            (Join-Path $root "Client\GUI\release\win-unpacked\Aydo Security.exe") = "ci-authoring-fixture"
+            (Join-Path $root "data\aaa.7z") = "ci-authoring-fixture"
+            (Join-Path $root "data\file_hashes.db") = "ci-authoring-fixture"
+          }
+
+          foreach ($entry in $fixtures.GetEnumerator()) {
+            $parent = Split-Path -Parent $entry.Key
+            New-Item -ItemType Directory -Force -Path $parent | Out-Null
+            Set-Content -LiteralPath $entry.Key -Value $entry.Value -NoNewline
+          }
+
+          foreach ($path in $fixtures.Keys) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "Installer fixture was not created: $path"
+            }
+            Write-Host "Fixture ready: $path"
+          }
+
+      - name: Compile WiX authoring against fixtures
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:GITHUB_WORKSPACE "Installer"
+          Push-Location $installer
+          try {
+            msbuild Installer.wixproj /nologo /restore /t:Compile /p:Configuration=Release /p:Platform=x64
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Pop-Location
+          }
+
   ci-success:
     name: CI required checks
     if: always()
@@ -261,6 +282,7 @@ jobs:
       - python-tests
       - desktop-tests
       - native-tests
+      - installer-validation
     runs-on: ubuntu-latest
     steps:
       - name: Require all test suites
