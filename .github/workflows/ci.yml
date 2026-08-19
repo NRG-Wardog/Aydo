@@ -103,8 +103,8 @@ jobs:
 
           # The hosted runner ships vcpkg, but direct .vcxproj builds do not
           # automatically import its MSBuild integration. Register the current
-          # runner's vcpkg instance so manifest dependencies contribute their
-          # include/library paths to every native project.
+          # runner's vcpkg instance so the already-installed manifest packages
+          # contribute their include/library paths to every native project.
           & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" integrate install
           if ($LASTEXITCODE -ne 0) {
             throw "vcpkg MSBuild integration failed."
@@ -123,10 +123,12 @@ jobs:
             "server\Server\Server.vcxproj"
           )
           foreach ($project in $projects) {
+            # Dependencies were installed explicitly in the previous step.
+            # Disable MSBuild's manifest bootstrap here so it does not invoke a
+            # second vcpkg install with an empty triplet on hosted runners.
             msbuild $project /nologo /m /restore /t:Build `
               /p:Configuration=Release /p:Platform=x64 `
-              /p:VcpkgEnableManifest=true `
-              /p:VcpkgManifestRoot="$env:GITHUB_WORKSPACE\" `
+              /p:VcpkgEnableManifest=false `
               /p:VcpkgRoot="$vcpkgRoot" `
               /p:VcpkgInstalledDir="$vcpkgInstalledDir" `
               /p:VcpkgTriplet=x64-windows-static
