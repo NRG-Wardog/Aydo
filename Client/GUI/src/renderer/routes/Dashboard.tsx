@@ -24,6 +24,15 @@ import KpiCard from "../components/KpiCard";
 import Shell from "../components/Shell";
 import { antivirusService, useAntivirus } from "../services/antivirusService";
 
+type CapabilityState = "online" | "standby" | "unknown";
+
+type Capability = {
+  key: string;
+  label: string;
+  icon: typeof Cpu;
+  state: CapabilityState;
+};
+
 /* ── stagger children ── */
 const container = {
   hidden: { opacity: 0 },
@@ -124,7 +133,7 @@ const Dashboard = () => {
     return deduplicateEvents(base);
   }, [antivirus.recentEvents, severityFilter]);
 
-  const capabilities = [
+  const capabilities: Capability[] = [
     {
       key: "driver",
       label: "Driver",
@@ -157,7 +166,7 @@ const Dashboard = () => {
     },
   ];
 
-  const capabilityStyle = (state: "online" | "standby" | "unknown") => {
+  const capabilityStyle = (state: CapabilityState) => {
     switch (state) {
       case "online":
         return "border-accent/40 bg-accent/10 text-accent";
