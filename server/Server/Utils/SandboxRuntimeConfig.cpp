@@ -107,29 +107,29 @@ bool reportSelfTest(bool condition,
 
 Json::Value buildValidSandboxConfig() {
   Json::Value sandbox(Json::objectValue);
-  sandbox["vmRunnerPath"] = R"(C:\Desktop\aydo\x64\Release\VMRunner.exe)";
+  sandbox["vmRunnerPath"] = R"(C:\Aydo\x64\Release\VMRunner.exe)";
   sandbox["vmRunPath"] =
       R"(C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe)";
-  sandbox["analysisVmPath"] = R"(D:\veeeertoooaaalll\SANDBOX1\SANDBOX1.vmx)";
-  sandbox["sandboxesDirectoryPath"] = R"(D:\veeeertoooaaalll)";
+  sandbox["analysisVmPath"] = R"(D:\VMs\SandboxTemplate\SandboxTemplate.vmx)";
+  sandbox["sandboxesDirectoryPath"] = R"(D:\VMs\SandboxTests)";
   sandbox["vmStartMode"] = "nogui";
-  sandbox["guestUser"] = "Cyber_user";
-  sandbox["guestPass"] = "1234";
+  sandbox["guestUser"] = "SandboxUser";
+  sandbox["guestPass"] = "test-only-secret";
   sandbox["guestSharedDir"] = R"(\\vmware-host\Shared Folders\Shared)";
   sandbox["shareFileName"] = "log.sqlite";
   sandbox["pmHostPath"] =
-      R"(C:\Desktop\aydo\server\VM\ProcessMonitor\bin\x64\Release\ProcessMonitor.exe)";
-  sandbox["pmGuestPath"] = R"(C:\Users\Cyber_user\Desktop\ProcessMonitor.exe)";
+      R"(C:\Aydo\server\VM\ProcessMonitor\bin\x64\Release\ProcessMonitor.exe)";
+  sandbox["pmGuestPath"] = R"(C:\Users\SandboxUser\Desktop\ProcessMonitor.exe)";
   sandbox["dllInjectorHostPath"] =
-      R"(C:\Desktop\aydo\x64\Debug\ProcessRunnerDLL.dll)";
+      R"(C:\Aydo\x64\Release\ProcessRunnerDLL.dll)";
   sandbox["dllInjectorGuestPath"] =
-      R"(C:\Users\Cyber_user\Desktop\InjectedDLL.dll)";
+      R"(C:\Users\SandboxUser\Desktop\InjectedDLL.dll)";
   sandbox["processRunnerHostPath"] =
-      R"(C:\Desktop\aydo\x64\Debug\ProcessRunner.exe)";
+      R"(C:\Aydo\x64\Release\ProcessRunner.exe)";
   sandbox["processRunnerGuestPath"] =
-      R"(C:\Users\Cyber_user\Desktop\ProcessRunner.exe)";
+      R"(C:\Users\SandboxUser\Desktop\ProcessRunner.exe)";
   sandbox["suspiciousWorkdirGuest"] =
-      R"(C:\Users\Cyber_user\Desktop\checks)";
+      R"(C:\Users\SandboxUser\Desktop\checks)";
   sandbox["vmPowerOnMaxRetries"] = 60U;
   sandbox["vmPowerOnSleepMs"] = 2000U;
   sandbox["vmToolsMaxRetries"] = 60U;
@@ -247,7 +247,7 @@ bool runSelfTests(std::string *failure) {
   const Config &config = *loadResult.config;
   if (!reportSelfTest(
           config.sharedLogDbPath("abc123") ==
-              (std::filesystem::path(R"(D:\veeeertoooaaalll)") / "abc123" /
+              (std::filesystem::path(R"(D:\VMs\SandboxTests)") / "abc123" /
                "shared" / "log.sqlite"),
           "sandbox log path uses configured sandboxes directory", failure)) {
     return false;
@@ -256,7 +256,7 @@ bool runSelfTests(std::string *failure) {
   const auto env = config.toEnvironment();
   if (!reportSelfTest(
           containsEnvValue(env, "SANDBOXES_DIRECTORY_PATH",
-                           R"(D:\veeeertoooaaalll)"),
+                           R"(D:\VMs\SandboxTests)"),
           "sandbox environment exports sandboxes directory", failure)) {
     return false;
   }

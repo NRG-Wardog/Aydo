@@ -1,10 +1,54 @@
 # Aydo Endpoint Protection Platform
 
-Aydo is a Windows endpoint protection platform (EPP) that combines local
-prevention, endpoint telemetry, static and dynamic analysis, and a desktop
-management experience. The repository contains the endpoint service and kernel
-driver, an Electron desktop application, a C++ backend, and an isolated VMware
-sandbox pipeline.
+[![CI](https://github.com/NRG-Wardog/Aydo/actions/workflows/ci.yml/badge.svg?branch=production)](https://github.com/NRG-Wardog/Aydo/actions/workflows/ci.yml)
+
+**Windows endpoint-protection engineering platform spanning kernel/user-mode components, endpoint telemetry, static and dynamic analysis, C++ backend services, desktop management, and isolated VMware sandboxing.**
+
+Aydo is an EPP/EDR-oriented project built to explore how modern endpoint-security products are composed as systems rather than as a single scanner. The repository contains a Windows kernel driver, privileged endpoint service, Electron/React desktop application, Drogon-based C++ backend, PostgreSQL persistence, VMware sandbox orchestration, guest execution tooling, ETW-based behavioral monitoring, and WiX installer projects.
+
+> **Status:** Active development. The repository demonstrates implemented endpoint/security architecture and validation workflows; it is not presented as a commercial antivirus replacement.
+
+**Documentation:** [Architecture](docs/ARCHITECTURE.md) · [Security policy](SECURITY.md) · [CI](.github/workflows/ci.yml) · [License](LICENSE)
+
+---
+
+## System Architecture
+
+```mermaid
+flowchart LR
+    subgraph Endpoint[Windows Endpoint]
+        KD[Kernel Driver]
+        ES[Endpoint Service]
+        GUI[Electron / React Desktop App]
+        KD <--> ES
+        GUI <--> ES
+    end
+
+    subgraph Backend[C++ Backend]
+        API[Drogon API]
+        DB[(PostgreSQL)]
+        SCHED[Scan / Sandbox Orchestration]
+        API <--> DB
+        API --> SCHED
+    end
+
+    subgraph Sandbox[Isolated VMware Analysis]
+        VMR[VMRunner]
+        PR[Guest Process Runner]
+        PM[ProcessMonitor / ETW]
+        VMR --> PR
+        PR --> PM
+    end
+
+    ES <--> API
+    SCHED --> VMR
+    PM --> SCHED
+    API --> GUI
+```
+
+The architecture keeps endpoint enforcement, user-facing management, backend coordination, and sandbox execution as separate boundaries with explicit communication paths.
+
+---
 
 ## Main Components
 
@@ -12,41 +56,76 @@ sandbox pipeline.
 | --- | --- | --- |
 | `Client/KernelDriver` | Kernel driver | Process protection and kernel-to-service communication |
 | `Client/Service` | Endpoint service | Static scanning, real-time monitoring, server communication, and scan orchestration |
-| `Client/GUI` | Desktop application | Electron, React, and TypeScript user interface |
-| `server/Server` | Backend API | Drogon-based authentication, uploads, scan scheduling, and sandbox coordination |
+| `Client/GUI` | Desktop application | Electron, React, and TypeScript management UI |
+| `server/Server` | Backend API | Drogon authentication, uploads, scan scheduling, result coordination, and sandbox orchestration |
 | `server/VM/VMRunner` | Sandbox runner | VMware lifecycle, warm-VM pooling, payload execution, and result collection |
-| `server/VM/ProcessMonitor` | VM telemetry | ETW collection, behavioral detections, and SQLite findings |
-| `server/VM/ProcessRunner*` | Payload runner | Guest-side process launch and injection support |
+| `server/VM/ProcessMonitor` | Behavioral telemetry | ETW collection, behavioral detections, and SQLite-backed findings |
+| `server/VM/ProcessRunner*` | Guest execution | Controlled guest-side execution support used by the sandbox workflow |
 | `Installer` | Windows installer | WiX installer and bootstrapper projects |
+
+For a deeper component/data-flow breakdown, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+---
+
+## Detection and Analysis Layers
+
+Aydo combines multiple evidence paths rather than relying on one detector:
+
+- hash and signature-based detection;
+- YARA scanning;
+- Sigma-oriented detection logic;
+- PE/static file analysis;
+- endpoint telemetry;
+- real-time protection workflows;
+- isolated dynamic analysis in VMware;
+- behavioral findings collected through ETW/process monitoring.
+
+Generated rule/data artifacts are intentionally kept outside Git.
+
+---
+
+## Portable Native Configuration
+
+Reusable native dependencies are resolved through the repository `vcpkg.json` manifest. The endpoint service keeps the YARA-X C API as an explicit external dependency rather than embedding a developer-workstation path.
+
+Set `YARA_X_ROOT` to the C API release directory containing `yara_x.h` and `yara_x_capi.lib`, or pass the same directory as `/p:YaraXRoot=...` to MSBuild. The project fails with a clear configuration error when those files are unavailable.
+
+Sandbox paths and guest credentials belong in local configuration, not source control. `server/Server/config.example.json` is the configuration contract. The backend exports resolved sandbox values to VMRunner, while direct VMRunner execution can use environment-variable overrides.
+
+---
 
 ## Requirements
 
-- Windows 10 or Windows 11, x64
-- Visual Studio 2022 with the Desktop development with C++ workload
-- Windows 10/11 SDK and WDK for the kernel driver
+- Windows 10/11 x64
+- Visual Studio 2022 with **Desktop development with C++**
+- Windows 10/11 SDK + WDK
 - C++20-capable MSVC toolchain (`v143`)
 - VMware Workstation with `vmrun.exe` for dynamic analysis
-- PostgreSQL for the backend
-- Drogon and the native dependencies referenced by the Visual Studio projects
-- Bun 1.1 or newer for the desktop application
-- WiX Toolset 6 for installer builds
-- Python 3 for database and rule update scripts
+- PostgreSQL
+- native dependencies declared in `vcpkg.json`
+- YARA-X C API files for the endpoint service
+- Bun 1.1+
+- WiX Toolset 6
+- Python 3
 
-Some project files currently contain machine-specific native include and
-library paths. Adjust them for your local vcpkg/SDK installation before building.
+---
 
 ## Build the Native Solution
 
-Open `Aydo.sln` in Visual Studio, select `x64` and the required configuration,
-then build the solution. From a Visual Studio Developer PowerShell, the same can
-be done with:
+Open `Aydo.sln` in Visual Studio, select `x64` and the required configuration, then build the solution.
 
 ```powershell
 msbuild .\Aydo.sln /m /p:Configuration=Release /p:Platform=x64
 ```
 
-Build outputs are written under the solution's `x64/Release` or `x64/Debug`
-directories, with some VM projects retaining project-local output folders.
+For the endpoint service, configure YARA-X first:
+
+```powershell
+$env:YARA_X_ROOT = "C:\path\to\yara-x-c-api-release"
+msbuild .\Client\Service\Service.vcxproj /m /p:Configuration=Release /p:Platform=x64
+```
+
+---
 
 ## Desktop Application
 
@@ -56,114 +135,116 @@ bun install
 bun run dev
 ```
 
-Create a production bundle with `bun run build`, or package the application
-with `bun run package`. The desktop client automatically uses a native engine
-build when one is available and otherwise falls back to its simulator. See
-[`Client/GUI/README.md`](Client/GUI/README.md) for engine overrides and E2E test
-instructions.
+Use `bun run build` for a production build and `bun run package` for desktop packaging. The client supports a simulator path when the native engine is unavailable. See [`Client/GUI/README.md`](Client/GUI/README.md) for engine overrides and E2E instructions.
+
+---
 
 ## Backend Configuration
 
-Copy the example configuration and replace every placeholder:
+Create local configuration from the neutral example:
 
 ```powershell
 Copy-Item server\Server\config.example.json server\Server\config.json
 ```
 
-Configure at least:
+Configure PostgreSQL, JWT secret, upload/scan limits, and `custom_config.sandbox` locally. Do **not** commit production credentials, malware samples, machine-specific secrets, or real guest credentials.
 
-- the PostgreSQL connection
-- a strong JWT secret
-- upload and scan-processing limits
-- `custom_config.sandbox` paths and VMware guest settings
+Security-sensitive findings should follow [`SECURITY.md`](SECURITY.md).
 
-Do not commit production credentials or machine-specific secrets. The full
-sandbox configuration contract is documented in
-[`server/Server/config.example.json`](server/Server/config.example.json).
+---
 
 ## Dynamic Analysis and Warm VM Pool
 
-The backend launches `VMRunner.exe` with sandbox settings supplied through the
-server configuration. VMRunner can preload reusable sandbox copies to reduce
-scan startup time:
+The backend coordinates isolated analysis through `VMRunner.exe`. VMRunner can prepare reusable warm sandbox copies to reduce startup latency:
 
 ```powershell
 .\x64\Release\VMRunner.exe --prepare-warm-pool
 ```
 
-The server starts the preloader during startup and replenishes the pool after a
-scan. VM state is stored below the configured sandbox directory. Run the
-backend and VMware processes with only the permissions required by the target
-environment.
-
-Available diagnostics include:
+Available deterministic diagnostics include:
 
 ```powershell
 .\x64\Release\VMRunner.exe --self-test
 .\x64\Release\Server.exe --self-test
 ```
 
-The first command validates VM lifecycle and shared-folder behavior. The second
-validates sandbox configuration parsing and result-path resolution.
+Full VM integration requires a configured VMware guest and credentials that are intentionally not committed.
 
-## Endpoint Data and Rules
-
-Generated databases and rule sets belong in `data/` and are intentionally not
-stored in Git. Update them from the repository root:
-
-```powershell
-python scripts\update_file_hashes_db.py -d -e -p
-python scripts\update_file_signatures_db.py -d -e -p
-python scripts\update_yara_rules.py
-python scripts\update_sigma_rules.py
-```
-
-The hash/signature source may require a manual ClamAV database download when
-the upstream service blocks automated retrieval.
+---
 
 ## Tests and Validation
 
-- Build `Aydo.sln` for `x64` in Visual Studio or with MSBuild.
-- Run `VMRunner.exe --self-test` and `Server.exe --self-test`.
-- Run the ProcessMonitor deterministic and live tests described in
-  [`server/VM/ProcessMonitor/README.md`](server/VM/ProcessMonitor/README.md).
-- Run `bun run test:e2e` from `Client/GUI` for the desktop smoke tests.
-- Run `python -m unittest discover -s tests/python -v` for update-script tests.
-- Run `scripts/ci/run_native_tests.ps1` after a native Release build to execute
-  all deterministic native self-tests.
+Local validation includes:
 
-VM integration tests require a configured VMware guest and cannot run safely
-without the paths and credentials from the local server configuration.
+```powershell
+python -m unittest discover -s tests/python -v
+cd Client\GUI
+bun run test:ci
+```
 
-## CI/CD
+After a native Release build:
 
-GitHub Actions runs the following checks for pull requests and pushes to the
-release branches:
+```powershell
+.\scripts\ci\run_native_tests.ps1 -Configuration Release -SkipEndpointService
+```
 
-- Python update-script unit tests and bytecode compilation
-- desktop TypeScript checks, production build, and Playwright Electron E2E tests
-- Windows user-mode builds backed by the repository vcpkg manifest
-- VMRunner, backend configuration, and ProcessMonitor self-tests
-- kernel-driver project validation and WiX source validation
+On a fully provisioned machine with YARA-X configured, omit `-SkipEndpointService` to include the endpoint-service deterministic self-test.
 
-The endpoint service project is structurally validated in hosted CI, but its
-binary build still requires the separately supplied YARA-X C API library. Run
-`scripts/ci/run_native_tests.ps1` without `-SkipEndpointService` on a fully
-provisioned build machine to include its deterministic self-test.
+### GitHub Actions evidence
 
-Tags matching `v*` run the release workflow, package the Windows desktop app,
-upload the build artifact, and publish it to the matching GitHub Release. The
-kernel driver requires the WDK and production signing credentials; signed
-driver and full MSI publication should only be enabled after those secrets are
-configured in the repository environment.
+Pull requests and pushes to release branches validate:
+
+- repository hygiene: no tracked local server config or known workstation-specific residue;
+- Python update-script tests and compilation;
+- desktop TypeScript checks, production build, and Playwright Electron E2E;
+- Windows user-mode builds using the repository vcpkg manifest;
+- deterministic VMRunner, server-configuration, and ProcessMonitor self-tests;
+- endpoint-service project coverage;
+- kernel-driver WDK project structure;
+- WiX SDK restore and installer-authoring/source validation;
+- native artifact upload;
+- an aggregate required-check job that fails unless all suites pass.
+
+Hosted CI does not claim to reproduce signed kernel-driver deployment or a live VMware sandbox. Those remain controlled-environment validation boundaries.
+
+---
+
+## CI/CD and Releases
+
+The release workflow is tag-driven. Tags matching `v*` build/package the Windows desktop application, upload the artifact, and publish the corresponding GitHub Release.
+
+The kernel driver requires the WDK and production signing credentials; signed-driver and full installer publication should only be enabled in a controlled release environment with the required secrets and artifacts.
+
+---
+
+## Security / Engineering Boundaries
+
+- kernel ↔ service communication is treated as a privilege boundary;
+- the desktop UI does not own core detection/security behavior;
+- backend secrets and local machine configuration remain external to source control;
+- malware samples should not be submitted through public issues/PRs;
+- sandbox execution is isolated from normal endpoint/backend operation;
+- infrastructure-dependent validation is documented instead of simulated as a passing test.
+
+See [`SECURITY.md`](SECURITY.md) for reporting guidance.
+
+---
+
+## Known Limitations
+
+- Complete sandbox validation requires VMware and a prepared guest environment.
+- Hosted CI cannot reproduce signed kernel-driver deployment or every privileged integration path.
+- The endpoint-service binary requires an externally supplied YARA-X C API distribution.
+- This is an engineering/research platform under active development, not a certified security product.
+
+---
 
 ## Branch Promotion
 
-Feature branches merge into `v4.0.0`, release changes are promoted to
-`develop`, and validated releases are then promoted to `production`. Keep the
-same tested commits throughout that sequence and do not force-push shared
-branches.
+Development changes are validated on `develop` before promotion to `production`. Historical milestone and feature branches are retained where they preserve meaningful project evolution; release publication is tied to version tags rather than branch names.
+
+---
 
 ## License
 
-This project is licensed under the MIT License. See [`LICENSE`](LICENSE).
+Aydo is licensed under the MIT License. See [`LICENSE`](LICENSE).
