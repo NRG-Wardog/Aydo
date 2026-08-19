@@ -1,0 +1,288 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+      - production
+      - v4.0.0
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-hygiene:
+    name: Repository hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject tracked local configuration and workstation residue
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          tracked = {
+              item.decode("utf-8")
+              for item in subprocess.check_output(["git", "ls-files", "-z"]).split(b"\0")
+              if item
+          }
+
+          forbidden_files = {"server/Server/config.json"}
+          present = sorted(forbidden_files & tracked)
+          if present:
+              raise SystemExit(
+                  "Local configuration must not be tracked:\n" + "\n".join(present)
+              )
+
+          if "server/Server/config.example.json" not in tracked:
+              raise SystemExit("The neutral server configuration example is missing")
+
+          markers = (
+              r"C:\Users\tzema",
+              r"C:\Users\KAN12",
+              r"C:\Users\Cyber_user",
+              r"C:\Dev\Magshii",
+              r"D:\veee",
+              "secret-shhhh-dont-tell",
+          )
+          suffixes = {
+              ".c", ".cc", ".cpp", ".h", ".hpp", ".json",
+              ".py", ".ts", ".tsx", ".vcxproj", ".wxs",
+          }
+          findings = []
+          for relative in sorted(tracked):
+              path = Path(relative)
+              if path.suffix.lower() not in suffixes or not path.is_file():
+                  continue
+              text = path.read_text(encoding="utf-8", errors="ignore")
+              for marker in markers:
+                  if marker in text:
+                      findings.append(f"{relative}: contains {marker!r}")
+
+          if findings:
+              raise SystemExit(
+                  "Developer-specific configuration residue found:\n"
+                  + "\n".join(findings)
+              )
+          PY
+
+  python-tests:
+    name: Python update-script tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run unit tests
+        run: python -m unittest discover -s tests/python -v
+      - name: Compile Python sources
+        run: python -m compileall -q scripts tests/python
+
+  desktop-tests:
+    name: Desktop typecheck, build, and E2E
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Client/GUI
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.6"
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Install Playwright system dependencies
+        run: bunx playwright install --with-deps chromium
+      - name: Run desktop CI tests
+        run: xvfb-run --auto-servernum bun run test:ci
+      - name: Upload Playwright diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-playwright-diagnostics
+          path: |
+            Client/GUI/playwright-report
+            Client/GUI/test-results
+          if-no-files-found: ignore
+
+  native-tests:
+    name: Native Windows build and self-tests
+    runs-on: windows-2022
+    env:
+      VCPKG_DEFAULT_TRIPLET: x64-windows-static
+      VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            vcpkg_installed
+            C:\Users\runneradmin\AppData\Local\vcpkg\archives
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+
+      - name: Install native dependencies
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $assetScript = Join-Path $env:GITHUB_WORKSPACE "scripts\ci\fetch-vcpkg-asset.ps1"
+          $env:X_VCPKG_ASSET_SOURCES = "clear;x-script,pwsh -NoProfile -File `"$assetScript`" `"{url}`" `"{sha512}`" `"{dst}`""
+          $env:VCPKG_KEEP_ENV_VARS = "GITHUB_TOKEN"
+
+          $maximumAttempts = 3
+          for ($attempt = 1; $attempt -le $maximumAttempts; $attempt++) {
+            & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install `
+              --triplet x64-windows-static `
+              --x-manifest-root "$env:GITHUB_WORKSPACE"
+
+            if ($LASTEXITCODE -eq 0) {
+              break
+            }
+
+            if ($attempt -lt $maximumAttempts) {
+              Write-Warning "vcpkg install attempt $attempt failed; retrying in 30 seconds."
+              Start-Sleep -Seconds 30
+            } else {
+              throw "vcpkg install failed after $maximumAttempts attempts."
+            }
+          }
+
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" integrate install
+          if ($LASTEXITCODE -ne 0) {
+            throw "vcpkg MSBuild integration failed."
+          }
+
+      - name: Build user-mode projects
+        shell: pwsh
+        run: |
+          $vcpkgRoot = "$env:VCPKG_INSTALLATION_ROOT\"
+          $vcpkgInstalledDir = Join-Path $env:GITHUB_WORKSPACE "vcpkg_installed\"
+          $projects = @(
+            "server\VM\ProcessRunnerDLL\ProcessRunnerDLL.vcxproj",
+            "server\VM\ProcessRunner\ProcessRunner.vcxproj",
+            "server\VM\VMRunner\VMRunner.vcxproj",
+            "server\VM\ProcessMonitor\ProcessMonitor.vcxproj",
+            "server\Server\Server.vcxproj"
+          )
+          foreach ($project in $projects) {
+            msbuild $project /nologo /m /restore /t:Build `
+              /p:Configuration=Release /p:Platform=x64 `
+              /p:VcpkgEnableManifest=false `
+              /p:VcpkgRoot="$vcpkgRoot" `
+              /p:VcpkgInstalledDir="$vcpkgInstalledDir" `
+              /p:VcpkgTriplet=x64-windows-static
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Run deterministic native self-tests
+        shell: pwsh
+        run: ./scripts/ci/run_native_tests.ps1 -Configuration Release -SkipEndpointService
+
+      - name: Validate endpoint service project coverage
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content Client/Service/Service.vcxproj
+          $sources = @($project.Project.ItemGroup.ClCompile.Include)
+          $required = @("Main.cpp", "ProcessMonitor.cpp", "Yara\YScanningEngine.cpp")
+          foreach ($source in $required) {
+            if ($sources -notcontains $source) {
+              throw "Endpoint service project is missing expected source: $source"
+            }
+          }
+
+      - name: Validate kernel driver project
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content Client/KernelDriver/KernelDriver.vcxproj
+          if ($project.Project.ItemGroup.ClCompile.Count -eq 0) {
+            throw "Kernel driver project has no compile inputs"
+          }
+          if ($project.Project.PropertyGroup.PlatformToolset -notcontains "WindowsKernelModeDriver10.0") {
+            throw "Kernel driver project is not configured for the WDK"
+          }
+
+      - name: Upload native binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: aydo-native-release
+          path: |
+            x64/Release/**
+            server/Server/x64/Release/**
+            server/VM/VMRunner/x64/Release/**
+            server/VM/ProcessMonitor/bin/x64/Release/**
+          if-no-files-found: error
+
+  installer-validation:
+    name: WiX installer authoring validation
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Restore WiX SDK and extensions
+        shell: pwsh
+        run: msbuild Installer/Installer.wixproj /nologo /restore /t:Restore /p:Configuration=Release /p:Platform=x64
+
+      - name: Validate WiX source structure
+        shell: pwsh
+        run: |
+          [xml]$wix = Get-Content Installer/Bundle.wxs
+          if ($wix.Wix -eq $null) {
+            throw "Installer/Bundle.wxs is not valid WiX XML."
+          }
+
+          $source = Get-Content Installer/Bundle.wxs -Raw
+          if ($source -match '(?i)[A-Z]:\\(Users|Dev|Projects|Source)\\') {
+            throw "Installer authoring contains a machine-specific absolute path."
+          }
+
+          $requiredSources = @(
+            '..\x64\Release\KernelDriver.sys',
+            '..\x64\Release\Service.exe',
+            '..\data\aaa.7z',
+            '..\data\file_hashes.db'
+          )
+          foreach ($requiredSource in $requiredSources) {
+            if (-not $source.Contains($requiredSource)) {
+              throw "Installer authoring is missing expected source reference: $requiredSource"
+            }
+          }
+
+          if (-not $source.Contains('..\Client\GUI\release\win-unpacked\**')) {
+            throw "Installer authoring is missing the packaged desktop application harvest path."
+          }
+
+  ci-success:
+    name: CI required checks
+    if: always()
+    needs:
+      - repository-hygiene
+      - python-tests
+      - desktop-tests
+      - native-tests
+      - installer-validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all test suites
+        env:
+          NEEDS: ${{ toJson(needs) }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+
+          results = {name: job["result"] for name, job in json.loads(os.environ["NEEDS"]).items()}
+          print(results)
+          sys.exit(0 if all(result == "success" for result in results.values()) else 1)
+          PY
