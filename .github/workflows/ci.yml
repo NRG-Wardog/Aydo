@@ -101,10 +101,6 @@ jobs:
             }
           }
 
-          # The hosted runner ships vcpkg, but direct .vcxproj builds do not
-          # automatically import its MSBuild integration. Register the current
-          # runner's vcpkg instance so the already-installed manifest packages
-          # contribute their include/library paths to every native project.
           & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" integrate install
           if ($LASTEXITCODE -ne 0) {
             throw "vcpkg MSBuild integration failed."
@@ -123,9 +119,6 @@ jobs:
             "server\Server\Server.vcxproj"
           )
           foreach ($project in $projects) {
-            # Dependencies were installed explicitly in the previous step.
-            # Disable MSBuild's manifest bootstrap here so it does not invoke a
-            # second vcpkg install with an empty triplet on hosted runners.
             msbuild $project /nologo /m /restore /t:Build `
               /p:Configuration=Release /p:Platform=x64 `
               /p:VcpkgEnableManifest=false `
@@ -162,30 +155,6 @@ jobs:
             throw "Kernel driver project is not configured for the WDK"
           }
 
-      - name: Validate WiX authoring
-        shell: pwsh
-        run: |
-          # Hosted CI validates the installer authoring without pretending to
-          # produce a deployable endpoint package. WDK-built endpoint binaries,
-          # the packaged Electron app, and generated security data are supplied
-          # only by the controlled release environment.
-          New-Item -ItemType Directory -Force x64/Release | Out-Null
-          New-Item -ItemType Directory -Force Client/GUI/release/win-unpacked | Out-Null
-          New-Item -ItemType Directory -Force data | Out-Null
-          Set-Content -NoNewline x64/Release/KernelDriver.sys "ci-authoring-fixture"
-          Set-Content -NoNewline x64/Release/Service.exe "ci-authoring-fixture"
-          Set-Content -NoNewline x64/Release/runtime.dll "ci-authoring-fixture"
-          Set-Content -NoNewline "Client/GUI/release/win-unpacked/Aydo Security.exe" "ci-authoring-fixture"
-          Set-Content -NoNewline data/aaa.7z "ci-authoring-fixture"
-          Set-Content -NoNewline data/file_hashes.db "ci-authoring-fixture"
-          Push-Location Installer
-          try {
-            msbuild Installer.wixproj /nologo /restore /t:Compile /p:Configuration=Release /p:Platform=x64
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          } finally {
-            Pop-Location
-          }
-
       - name: Upload native binaries
         uses: actions/upload-artifact@v4
         with:
@@ -197,6 +166,46 @@ jobs:
             server/VM/ProcessMonitor/bin/x64/Release/**
           if-no-files-found: error
 
+  installer-validation:
+    name: WiX installer authoring validation
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Restore WiX SDK and extensions
+        shell: pwsh
+        run: msbuild Installer/Installer.wixproj /nologo /restore /t:Restore /p:Configuration=Release /p:Platform=x64
+
+      - name: Validate WiX source structure
+        shell: pwsh
+        run: |
+          [xml]$wix = Get-Content Installer/Bundle.wxs
+          if ($wix.Wix -eq $null) {
+            throw "Installer/Bundle.wxs is not valid WiX XML."
+          }
+
+          $source = Get-Content Installer/Bundle.wxs -Raw
+          if ($source -match '(?i)[A-Z]:\\(Users|Dev|Projects|Source)\\') {
+            throw "Installer authoring contains a machine-specific absolute path."
+          }
+
+          $requiredSources = @(
+            '..\x64\Release\KernelDriver.sys',
+            '..\x64\Release\Service.exe',
+            '..\data\aaa.7z',
+            '..\data\file_hashes.db'
+          )
+          foreach ($requiredSource in $requiredSources) {
+            if (-not $source.Contains($requiredSource)) {
+              throw "Installer authoring is missing expected source reference: $requiredSource"
+            }
+          }
+
+          if (-not $source.Contains('..\Client\GUI\release\win-unpacked\**')) {
+            throw "Installer authoring is missing the packaged desktop application harvest path."
+          }
+
   ci-success:
     name: CI required checks
     if: always()
@@ -204,6 +213,7 @@ jobs:
       - python-tests
       - desktop-tests
       - native-tests
+      - installer-validation
     runs-on: ubuntu-latest
     steps:
       - name: Require all test suites
