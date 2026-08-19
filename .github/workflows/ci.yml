@@ -162,8 +162,23 @@ jobs:
             throw "Kernel driver project is not configured for the WDK"
           }
 
-      - name: Validate WiX projects
-        run: msbuild Installer/Installer.wixproj /nologo /restore /t:Compile /p:Configuration=Release /p:Platform=x64
+      - name: Validate WiX authoring
+        shell: pwsh
+        run: |
+          # Hosted CI validates the installer authoring without pretending to
+          # produce a deployable endpoint package. WDK-built endpoint binaries,
+          # the packaged Electron app, and generated security data are supplied
+          # only by the controlled release environment.
+          New-Item -ItemType Directory -Force x64/Release | Out-Null
+          New-Item -ItemType Directory -Force Client/GUI/release/win-unpacked | Out-Null
+          New-Item -ItemType Directory -Force data | Out-Null
+          Set-Content -NoNewline x64/Release/KernelDriver.sys "ci-authoring-fixture"
+          Set-Content -NoNewline x64/Release/Service.exe "ci-authoring-fixture"
+          Set-Content -NoNewline x64/Release/runtime.dll "ci-authoring-fixture"
+          Set-Content -NoNewline "Client/GUI/release/win-unpacked/Aydo Security.exe" "ci-authoring-fixture"
+          Set-Content -NoNewline data/aaa.7z "ci-authoring-fixture"
+          Set-Content -NoNewline data/file_hashes.db "ci-authoring-fixture"
+          msbuild Installer/Installer.wixproj /nologo /restore /t:Compile /p:Configuration=Release /p:Platform=x64
 
       - name: Upload native binaries
         uses: actions/upload-artifact@v4
