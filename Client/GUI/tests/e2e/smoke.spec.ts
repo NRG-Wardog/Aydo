@@ -21,7 +21,12 @@ test("navigation and simulator events", async () => {
   try {
     const page = await app.firstWindow();
 
-    await expect(page.getByText("Threat Operations Login")).toBeVisible();
+    // The real application intentionally keeps its startup/credits splash
+    // visible for several seconds after the engine connects. CI should wait
+    // for the routed login UI instead of racing that production behavior.
+    await expect(page.getByText("Threat Operations Login")).toBeVisible({
+      timeout: 15_000,
+    });
 
     await page.getByRole("button", { name: "Continue as Guest" }).click();
 
