@@ -157,11 +157,6 @@
       <AdditionalIncludeDirectories>
         $(ProjectDir);
 $(ProjectDir)include;$(ProjectDir)include\core;$(ProjectDir)include\etw;$(ProjectDir)include\storage;$(ProjectDir)include\analysis;$(ProjectDir)include\detectors;
-        C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um;
-        C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared;
-        C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\ucrt;
-        D:\vcpkg\installed\x64-windows\include;
-        D:\vcpkg\installed\x64-windows-static\include;
         %(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
     </ClCompile>
@@ -169,7 +164,7 @@ $(ProjectDir)include;$(ProjectDir)include\core;$(ProjectDir)include\etw;$(Projec
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>advapi32.lib;tdh.lib;wevtapi.lib;uuid.lib;sqlite3.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\um\x64;D:\vcpkg\installed\x64-windows-static\debug\lib;D:\vcpkg\installed\x64-windows-static\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
     </Link>
@@ -190,11 +185,6 @@ $(ProjectDir)include;$(ProjectDir)include\core;$(ProjectDir)include\etw;$(Projec
       <AdditionalIncludeDirectories>
         $(ProjectDir);
 $(ProjectDir)include;$(ProjectDir)include\core;$(ProjectDir)include\etw;$(ProjectDir)include\storage;$(ProjectDir)include\analysis;$(ProjectDir)include\detectors;
-        C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared;
-        C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um;
-        C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\ucrt;
-        D:\vcpkg\installed\x64-windows\include;
-        D:\vcpkg\installed\x64-windows-static\include;
         %(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
     </ClCompile>
@@ -203,7 +193,7 @@ $(ProjectDir)include;$(ProjectDir)include\core;$(ProjectDir)include\etw;$(Projec
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>advapi32.lib;tdh.lib;wevtapi.lib;uuid.lib;sqlite3.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
-      <AdditionalLibraryDirectories>D:\vcpkg\installed\x64-windows-static\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <!-- =======================

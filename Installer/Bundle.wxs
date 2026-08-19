@@ -77,7 +77,7 @@
       >
         <File
           Id="KernelDriverSys"
-          Source="..\x64\Release\KernelDriver.sys"
+          Source="$(sys.SOURCEFILEDIR)..\x64\Release\KernelDriver.sys"
           KeyPath="yes"
         />
       </Component>
@@ -90,7 +90,7 @@
       >
         <File
           Id="ServiceExe"
-          Source="..\x64\Release\Service.exe"
+          Source="$(sys.SOURCEFILEDIR)..\x64\Release\Service.exe"
           KeyPath="yes"
         />
       </Component>
@@ -138,13 +138,13 @@
 
   <Fragment>
     <ComponentGroup Id="RuntimeDllFiles" Directory="INSTALLFOLDER">
-      <Files Include="..\x64\Release\*.dll" />
+      <Files Include="$(sys.SOURCEFILEDIR)..\x64\Release\*.dll" />
     </ComponentGroup>
   </Fragment>
 
   <Fragment>
     <ComponentGroup Id="GuiFiles" Directory="INSTALLFOLDER">
-      <Files Include="..\Client\GUI\release\win-unpacked\**" />
+      <Files Include="$(sys.SOURCEFILEDIR)..\Client\GUI\release\win-unpacked\**" />
     </ComponentGroup>
   </Fragment>
 
@@ -153,14 +153,14 @@
       <Component Id="AaaArchive" Guid="*">
         <File
           Id="Aaa7z"
-          Source="C:\Dev\Magshii\Project\FFFFFFFF\data\aaa.7z"
+          Source="$(sys.SOURCEFILEDIR)..\data\aaa.7z"
           KeyPath="yes"
         />
       </Component>
       <Component Id="FileHashesDb" Guid="*">
         <File
           Id="FileHashesDbFile"
-          Source="C:\Dev\Magshii\Project\AAAAAAA\aydo\data\file_hashes.db"
+          Source="$(sys.SOURCEFILEDIR)..\data\file_hashes.db"
           KeyPath="yes"
         />
       </Component>

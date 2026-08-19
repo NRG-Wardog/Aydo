@@ -4,13 +4,15 @@
   "version": "0.1.0",
   "type": "module",
   "main": "dist/main/index.js",
-  "packageManager": "bun@1.1.0",
+  "packageManager": "bun@1.3.6",
   "scripts": {
     "dev": "electron-vite dev",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.main.json",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "package": "bunx electron-builder",
-    "test:e2e": "bun run build && bunx playwright test"
+    "test:e2e": "bun run build && bunx playwright test",
+    "test:ci": "bun run typecheck && bun run test:e2e"
   },
   "dependencies": {
     "@nextui-org/react": "^2.6.0",
