@@ -178,7 +178,13 @@ jobs:
           Set-Content -NoNewline "Client/GUI/release/win-unpacked/Aydo Security.exe" "ci-authoring-fixture"
           Set-Content -NoNewline data/aaa.7z "ci-authoring-fixture"
           Set-Content -NoNewline data/file_hashes.db "ci-authoring-fixture"
-          msbuild Installer/Installer.wixproj /nologo /restore /t:Compile /p:Configuration=Release /p:Platform=x64
+          Push-Location Installer
+          try {
+            msbuild Installer.wixproj /nologo /restore /t:Compile /p:Configuration=Release /p:Platform=x64
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Pop-Location
+          }
 
       - name: Upload native binaries
         uses: actions/upload-artifact@v4
